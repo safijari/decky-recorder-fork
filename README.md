@@ -1,4 +1,9 @@
-# Decky Recorder
+# Decky Recorder Fork
+
+Note: This repository is a clone of the original Decky Recorder repo. For a variety of reasons I am no longer interested in being part of the Decky developers community
+at large which is basically a requirement for putting plugins onto their store. As such I will be releasing my updates for recorder/shotty/any other plugins separately.
+
+Original readme from marisaa999 below:
 
 ![Decky-Recorder Example Screenshot](decky-recorder-screenshot.png)
 
