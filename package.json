@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "decky-frontend-lib": "^3.20.7",
+    "decky-recorder": "link:",
     "react-icons": "^4.4.0"
   },
   "pnpm": {
