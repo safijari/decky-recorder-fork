@@ -25,6 +25,7 @@ std_err_file = open(Path(decky_plugin.DECKY_PLUGIN_LOG_DIR) / "decky-recorder-st
 logger = decky_plugin.logger
 
 from logging.handlers import TimedRotatingFileHandler
+
 log_file = Path(decky_plugin.DECKY_PLUGIN_LOG_DIR) / "decky-recorder.log"
 log_file_handler = TimedRotatingFileHandler(log_file, when="midnight", backupCount=2)
 log_file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
@@ -39,6 +40,7 @@ try:
 except Exception:
     logger.info(traceback.format_exc())
 
+
 def find_gst_processes():
     pids = []
     for child in psutil.process_iter():
@@ -46,17 +48,19 @@ def find_gst_processes():
             pids.append(child.pid)
     return pids
 
+
 def in_gamemode():
     for child in psutil.process_iter():
         if "gamescope-session" in " ".join(child.cmdline()):
             return True
     return False
 
+
 class Plugin:
     _recording_process = None
     _filepath: str = None
     _mode: str = "localFile"
-    _audioBitrate: int = 192000
+    _audioBitrate: int = 128
     _localFilePath: str = decky_plugin.HOME + "/Videos"
     _rollingRecordingFolder: str = "/dev/shm"
     _rollingRecordingPrefix: str = "Decky-Recorder-Rolling"
@@ -156,7 +160,7 @@ class Plugin:
                     break
             cmd = (
                 cmd
-                + f' pulsesrc device="Recording_{monitor}" ! audio/x-raw, channels=2 ! audioconvert ! faac bitrate={self._audioBitrate} rate-control=2 ! sink.audio_0'
+                + f' pulsesrc device="Recording_{monitor}" ! audio/x-raw, channels=2 ! audioconvert ! lamemp3enc target=bitrate bitrate={self._audioBitrate} cbr=true ! sink.audio_0'
             )
 
             # Starts the capture process
@@ -266,7 +270,7 @@ class Plugin:
         return self._fileformat
 
     async def loadConfig(self):
-        logger.info('Loading settings from: {}'.format(os.path.join(settingsDir, 'settings.json')))
+        logger.info("Loading settings from: {}".format(os.path.join(settingsDir, "settings.json")))
         ### TODO: IMPLEMENT ###
         self._settings = SettingsManager(name="decky-loader-settings", settings_directory=settingsDir)
         self._settings.read()
