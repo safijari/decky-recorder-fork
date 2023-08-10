@@ -33,7 +33,7 @@ logger.handlers.clear()
 logger.addHandler(log_file_handler)
 
 try:
-    sys.path.append(str(DEPSPATH / "psutil"))
+    sys.path = [str(DEPSPATH / "psutil")] + sys.path
     import psutil
 
     logger.info("Successfully loaded psutil")
