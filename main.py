@@ -130,6 +130,7 @@ class Plugin:
 
             # If mode is localFile
             if self._mode == "localFile":
+                self._localFilePath.mkdir(parents=True, exist_ok=True)
                 logger.info("Local File Recording")
                 dateTime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 if self._rolling:
