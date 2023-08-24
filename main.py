@@ -79,7 +79,6 @@ class Plugin:
                 logger.info(f"Killing rogue process {pid}")
                 os.kill(pid, signal.SIGKILL)
 
-    @asyncio.coroutine
     async def watchdog(self):
         logger.info("Watchdog started")
         while True:
