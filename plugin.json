@@ -1,10 +1,10 @@
 {
   "name": "Decky Recorder",
-  "author": "marissa999",
+  "author": "marissa999/safijari",
   "flags": ["debug"],
   "publish": {
     "tags": ["Capture"],
     "description": "Record your games with Decky Recorder",
-    "image": "https://github.com/marissa999/decky-recorder/raw/main/decky-recorder-screenshot.png"
+    "image": "https://github.com/safijari/decky-recorder-fork/raw/main/decky-recorder-screenshot.png"
   }
 }

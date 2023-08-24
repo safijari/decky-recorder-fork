@@ -1,6 +1,6 @@
 {
   "name": "decky-recorder",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "This plugin allows you to make screencaptures directly on the Steam Deck, without an external capture card!",
   "scripts": {
     "build": "shx rm -rf dist && rollup -c",
@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/SteamDeckHomebrew/decky-plugin-template.git"
+    "url": "git+https://github.com/safijari/decky-recorder-fork.git"
   },
   "keywords": [
     "decky",
@@ -18,12 +18,12 @@
     "steam-deck",
     "deck"
   ],
-  "author": "marissa999",
+  "author": "marissa999/safijari",
   "license": "BSD-3-Clause",
   "bugs": {
-    "url": "https://github.com/marissa999/decky-recorder/issues"
+    "url": "https://github.com/safijari/decky-recorder-fork/issues"
   },
-  "homepage": "https://github.com/marissa999/decky-recorder",
+  "homepage": "https://github.com/safijari/decky-recorder-fork",
   "devDependencies": {
     "@rollup/plugin-commonjs": "^21.1.0",
     "@rollup/plugin-json": "^4.1.0",
