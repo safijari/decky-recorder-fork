@@ -16,7 +16,9 @@ settingsDir = os.environ["DECKY_PLUGIN_SETTINGS_DIR"]
 
 import asyncio
 
-DEPSPATH = Path(decky_plugin.DECKY_PLUGIN_DIR) / "backend/out"
+DEPSPATH = Path(decky_plugin.DECKY_PLUGIN_DIR) / "bin"
+if not DEPSPATH.exists():
+    DEPSPATH = Path(decky_plugin.DECKY_PLUGIN_DIR) / "backend/out"
 GSTPLUGINSPATH = DEPSPATH / "gstreamer-1.0"
 
 std_out_file = open(Path(decky_plugin.DECKY_PLUGIN_LOG_DIR) / "decky-recorder-std-out.log", "w")
