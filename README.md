@@ -1,8 +1,6 @@
 # Decky Recorder Fork
 
-Note: This repository is a clone of the original Decky Recorder repo. For a variety of reasons I am no longer interested in being part of the Decky developers community
-at large which is basically a requirement for putting plugins onto their store. As such I will be releasing my updates for recorder/shotty/any other plugins separately
-and to that end I have cloned the original recorder repo to continue development separately.
+Note: This repository is a clone of the original Decky Recorder repo and is actively maintained.
 
 Note 2 EXTREMELY IMPORTANT: Decky recorder currently does NOT work on Steam OS 3.5. The issue was reported to Valve (https://github.com/ValveSoftware/SteamOS/issues/1000). 
 Initially it used to crash gamescope entirely but now it just doesn't start capture. Unless Valve fixes gamescope this plugin will likely become unusable when 3.5 is launched.
