@@ -123,10 +123,13 @@ class Plugin:
             )
 
             # Video Pipeline
+
             if not self._rolling:
-                videoPipeline = f"pipewiresrc do-timestamp=true ! decodebin ! queue ! videoconvert | x264enc ! h264parse ! {muxer} name=sink !"
+                videoPipeline = f"pipewiresrc do-timestamp=true always-copy=true ! videoconvert ! queue ! x264enc ! h264parse ! {muxer} name=sink !"
             else:
-                videoPipeline = "pipewiresrc do-timestamp=true ! decodebin ! queue ! videoconvert | x264enc ! h264parse !"
+                videoPipeline = (
+                    "pipewiresrc do-timestamp=true always-copy=true ! videoconvert ! queue ! x264enc ! h264parse !"
+                )
 
             cmd = "{} {}".format(start_command, videoPipeline)
 
