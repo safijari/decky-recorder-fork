@@ -99,7 +99,7 @@ class Plugin:
         try:
             logger.info("Starting recording")
 
-            app_name = str(app_name)
+            app_name = str(app_name).replace(":", " ")
             if app_name == "" or app_name == "null":
                 app_name = "Decky-Recorder"
 
@@ -313,7 +313,7 @@ class Plugin:
         return
 
     async def save_rolling_recording(self, clip_duration: float = 30.0, app_name: str = ""):
-        app_name = str(app_name)
+        app_name = str(app_name).replace(":", " ")
         if app_name == "" or app_name == "null":
             app_name = "Decky-Recorder"
         clip_duration = int(clip_duration)
