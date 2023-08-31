@@ -154,9 +154,12 @@ class Plugin:
             logger.info("Making audio pipeline")
             # Creates audio pipeline
             audio_device_output = subprocess.getoutput("pactl get-default-sink")
+            # expected output: alsa_output.pci-0000_04_00.5-platform-acp5x_mach.0.HiFi__hw_acp5x_1__sink when using internal speaker
+            # bluez_output.20_74_CF_F1_C0_1E.1 when using bluetooth
             logger.info(f"Audio device output {audio_device_output}")
+            monitor = ".monitor"
             for line in audio_device_output.split("\n"):
-                if "alsa_output" in line:
+                if "alsa_output" in line or "bluez_" in line:
                     monitor = line + ".monitor"
                     break
             cmd = (
