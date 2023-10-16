@@ -311,7 +311,7 @@ class Plugin:
         loop = asyncio.get_event_loop()
         self._watchdog_task = loop.create_task(Plugin.watchdog(self))
         await Plugin.loadConfig(self)
-        if Plugin.is_rolling(self):
+        if await Plugin.is_rolling(self):
             await Plugin.start_capturing(self)
         return
 
