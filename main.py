@@ -49,8 +49,7 @@ def find_gst_processes():
         try:
             if "Decky-Recorder" in " ".join(child.cmdline()):
                 pids.append(child.pid)
-        except:
-            # Handle zombie processes?
+        except psutil.NoSuchProcess as error:
             pass
     return pids
 
@@ -60,8 +59,7 @@ def in_gamemode():
         try:
             if "gamescope-session" in " ".join(child.cmdline()):
                 return True
-        except:
-            # Handle zombie processes?
+        except psutil.NoSuchProcess as error:
             pass
     return False
 
