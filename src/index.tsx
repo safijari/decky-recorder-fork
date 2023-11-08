@@ -24,6 +24,7 @@ class DeckyRecorderLogic
 	{
 	serverAPI: ServerAPI;
 	pressedAt: number = Date.now();
+	shareDown: boolean = false;
 
 	constructor(serverAPI: ServerAPI) {
 		this.serverAPI = serverAPI;
@@ -80,23 +81,36 @@ class DeckyRecorderLogic
 		Start 14
 		QAM  ???
 		L5 15
-		R5 16*/
+		R5 16
+		Share 29 */
 		for (const inputs of val) {
-			if (Date.now() - this.pressedAt < 2000) {
-				continue;
-			}
-			if (inputs.ulButtons && inputs.ulButtons & (1 << 13) && inputs.ulButtons & (1 << 14)) {
-				this.pressedAt = Date.now();
-				(Router as any).DisableHomeAndQuickAccessButtons();
-				setTimeout(() => {
-					(Router as any).EnableHomeAndQuickAccessButtons();
-				}, 1000)
-				const isRolling = await this.serverAPI.callPluginMethod("is_rolling", {});
-				if (isRolling.result as boolean) {
+			// if (Date.now() - this.pressedAt < 2000) {
+			// 	continue;
+			// }
+			// if (inputs.ulButtons && inputs.ulButtons & (1 << 13) && inputs.ulButtons & (1 << 14)) {
+			// 	this.pressedAt = Date.now();
+			// 	(Router as any).DisableHomeAndQuickAccessButtons();
+			// 	setTimeout(() => {
+			// 		(Router as any).EnableHomeAndQuickAccessButtons();
+			// 	}, 1000)
+			// 	const isRolling = await this.serverAPI.callPluginMethod("is_rolling", {});
+			// 	if (isRolling.result as boolean) {
+			// 		await this.saveRollingRecording(30);
+			// 	} else {
+			// 		await this.notify("Enabling replay mode", 1500, "Steam + Start to save last 30 seconds");
+			// 		this.toggleRolling(false);
+			// 	}
+			// }
+  			if (inputs.ulButtons && (inputs.ulButtons & (1 << 29))) {
+				if ((this.shareDown == false)) {
+					this.shareDown = true;
+					this.pressedAt = Date.now();
+				}
+			} else if (this.shareDown == true) {
+				this.shareDown = false;
+				var now = Date.now();
+				if (now - this.pressedAt >= 500) { // hold for longer than 500 ms
 					await this.saveRollingRecording(30);
-				} else {
-					await this.notify("Enabling replay mode", 1500, "Steam + Start to save last 30 seconds");
-					this.toggleRolling(false);
 				}
 			}
 		}
