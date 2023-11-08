@@ -46,15 +46,21 @@ except Exception:
 def find_gst_processes():
     pids = []
     for child in psutil.process_iter():
-        if "Decky-Recorder" in " ".join(child.cmdline()):
-            pids.append(child.pid)
+        try:
+            if "Decky-Recorder" in " ".join(child.cmdline()):
+                pids.append(child.pid)
+        except psutil.NoSuchProcess:
+            pass
     return pids
 
 
 def in_gamemode():
     for child in psutil.process_iter():
-        if "gamescope-session" in " ".join(child.cmdline()):
-            return True
+        try:
+            if "gamescope-session" in " ".join(child.cmdline()):
+                return True
+        except psutil.NoSuchProcess:
+            pass
     return False
 
 
@@ -90,6 +96,9 @@ class Plugin:
                 if not in_gm and is_cap:
                     logger.warn("Left gamemode but recording was still running, killing capture")
                     await Plugin.stop_capturing(self)
+                elif in_gm and not is_cap and self._rolling:
+                    logger.warn("Entered gamemode but recording was stopped, starting capture")
+                    await Plugin.start_capturing(self)
             except Exception:
                 logger.exception("watchdog")
             await asyncio.sleep(5)
@@ -274,7 +283,7 @@ class Plugin:
         return self._fileformat
 
     async def loadConfig(self):
-        logger.info("Loading settings from: {}".format(os.path.join(settingsDir, "settings.json")))
+        logger.info("Loading settings from: {}".format(os.path.join(settingsDir, "decky-loader-settings.json")))
         ### TODO: IMPLEMENT ###
         self._settings = SettingsManager(name="decky-loader-settings", settings_directory=settingsDir)
         self._settings.read()
@@ -300,7 +309,7 @@ class Plugin:
         loop = asyncio.get_event_loop()
         self._watchdog_task = loop.create_task(Plugin.watchdog(self))
         await Plugin.loadConfig(self)
-        if self._rolling:
+        if await Plugin.is_rolling(self):
             await Plugin.start_capturing(self)
         return
 
@@ -318,6 +327,12 @@ class Plugin:
             app_name = "Decky-Recorder"
         clip_duration = int(clip_duration)
         logger.info("Called save rolling function")
+
+        if not await Plugin.is_capturing(self):
+            logger.warn("Tried to capture recording, but capture was not started!")
+            Plugin.start_capturing(self)
+            return -1
+
         if time.time() - self._last_clip_time < 2:
             logger.info("Too early to record another clip")
             return 0

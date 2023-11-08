@@ -48,6 +48,8 @@ class DeckyRecorderLogic
 			await this.notify("Saved clip");
 		} else if (r == 0) {
 			await this.notify("Too early to record another clip");
+		} else if (r == -1) {
+			await this.notify("Enabling replay mode", 1500, "Steam + Start to save last 30 seconds");
 		} else {
 			await this.notify("ERROR: Could not save clip");
 		}
