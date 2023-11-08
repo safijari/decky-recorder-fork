@@ -21,11 +21,19 @@ import {
 import { FaVideo } from "react-icons/fa";
 
 abstract class Button {
+	buttonVals: number = 0;
 	saveClip: Function;
 	scanBlocked: boolean = false
 	
-	constructor(saveClipFunc: Function) {
+	constructor(buttonIndices: number[], saveClipFunc: Function) {
+		for(const index of buttonIndices) {
+			this.buttonVals = this.buttonVals | (1 << index);
+		}
 		this.saveClip = saveClipFunc;
+	}
+
+	allButtonsDown = (buttons: number) => {
+		return (buttons && (buttons & this.buttonVals));
 	}
 
 	blockScanning = async (timeout: number) => {
@@ -40,20 +48,9 @@ abstract class Button {
 
 class CombinedButtons extends Button {
 	pressedAt: number = Date.now();
-	buttonVals: number[];
 
 	constructor(buttonIndices: number[], saveClipFunc: Function) {
-		super(saveClipFunc);
-		this.buttonVals = buttonIndices.map((index) => (1 << index))
-	}
-
-	allButtonsDown = (buttons: number) => {
-		for(var buttonVal of this.buttonVals) {
-			if(!(buttons & buttonVal)) {
-				return false;
-			}
-		}
-		return true;
+		super(buttonIndices, saveClipFunc);
 	}
 
 	handleButtonInput = async (val: any[]) => {
@@ -61,7 +58,7 @@ class CombinedButtons extends Button {
 			return;
 		}
 		for (const inputs of val) {
-			if (inputs.ulButtons && this.allButtonsDown(inputs.ulButtons)) {
+			if (this.allButtonsDown(inputs.ulButtons)) {
 				this.blockScanning(2000);
 				(Router as any).DisableHomeAndQuickAccessButtons();
 				setTimeout(() => {
@@ -74,17 +71,15 @@ class CombinedButtons extends Button {
 }
 
 class HoldDownButton extends Button {
-	buttonVal: number;
 	wasDown: number = 0; // each bit stands for a controller
 	clipSaved: boolean = false;
 
 	constructor(buttonIndex: number, saveClipFunc: Function) {
-		super(saveClipFunc);
-		this.buttonVal = (1 << buttonIndex);
+		super([buttonIndex], saveClipFunc);
 	}
 
 	checkHoldPerController = async (inputs: any, index: number) => {
-		if ((inputs.ulButtons) && (inputs.ulButtons & this.buttonVal)) {
+		if (this.allButtonsDown(inputs.ulButtons)) {
 			if (this.scanBlocked === false) {	
 				// not a new down, so it's a long press since we had a block sleep before,
 				// save a clip if we haven't done so
