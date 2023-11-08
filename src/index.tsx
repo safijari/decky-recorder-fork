@@ -20,11 +20,105 @@ import {
 
 import { FaVideo } from "react-icons/fa";
 
-class DeckyRecorderLogic
-	{
-	serverAPI: ServerAPI;
+abstract class Button {
+	saveClip: Function;
+	scanBlocked: boolean = false
+	
+	constructor(saveClipFunc: Function) {
+		this.saveClip = saveClipFunc;
+	}
+
+	blockScanning = async (timeout: number) => {
+		this.scanBlocked = true;
+		setTimeout(() => {
+			this.scanBlocked = false;
+		}, timeout)	
+	}
+
+ 	abstract handleButtonInput(val: any[]) : any;
+}
+
+class CombinedButtons extends Button {
 	pressedAt: number = Date.now();
-	shareDown: boolean = false;
+	buttonVals: number[];
+
+	constructor(buttonIndices: number[], saveClipFunc: Function) {
+		super(saveClipFunc);
+		this.buttonVals = buttonIndices.map((index) => (1 << index))
+	}
+
+	allButtonsDown = (buttons: number) => {
+		for(var buttonVal of this.buttonVals) {
+			if(!(buttons & buttonVal)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	handleButtonInput = async (val: any[]) => {
+		if (this.scanBlocked === true) {
+			return;
+		}
+		for (const inputs of val) {
+			if (inputs.ulButtons && this.allButtonsDown(inputs.ulButtons)) {
+				this.blockScanning(2000);
+				(Router as any).DisableHomeAndQuickAccessButtons();
+				setTimeout(() => {
+					(Router as any).EnableHomeAndQuickAccessButtons();
+				}, 1000)
+				await this.saveClip(30);
+			}
+		}
+	}
+}
+
+class HoldDownButton extends Button {
+	buttonVal: number;
+	wasDown: number = 0; // each bit stands for a controller
+	clipSaved: boolean = false;
+
+	constructor(buttonIndex: number, saveClipFunc: Function) {
+		super(saveClipFunc);
+		this.buttonVal = (1 << buttonIndex);
+	}
+
+	checkHoldPerController = async (inputs: any, index: number) => {
+		if ((inputs.ulButtons) && (inputs.ulButtons & this.buttonVal)) {
+			if (this.scanBlocked === false) {	
+				// not a new down, so it's a long press since we had a block sleep before,
+				// save a clip if we haven't done so
+				if (this.wasDown & (1 << index)) {
+					if (this.clipSaved === false) {
+						this.clipSaved = true;
+						// block for 5 seconds to avoid smashing
+						this.blockScanning(5000);
+						this.saveClip();
+					}
+				// new down, block for some time and check again
+				// if the button is still down
+				} else { 
+					this.wasDown = this.wasDown | (1 << index)
+					this.clipSaved = false;
+					this.blockScanning(500);	
+				}
+			}
+		} else { 
+			// target button was down but now up / released, 
+			// reset status
+			if (this.wasDown & (1 << index)) {
+				this.wasDown = this.wasDown & ~(1 << index)
+			}
+		}
+	}
+
+	handleButtonInput = async (val: any[]) => {
+		val.forEach(this.checkHoldPerController);
+	}
+}
+
+class DeckyRecorderLogic {
+	serverAPI: ServerAPI;
 
 	constructor(serverAPI: ServerAPI) {
 		this.serverAPI = serverAPI;
@@ -42,7 +136,15 @@ class DeckyRecorderLogic
 		});
 	}
 
-	saveRollingRecording = async  (duration: number) => {
+	saveRollingRecording = async (duration: number) => {
+		// rolling recording wasn't started, start from now on
+		const isRolling = await this.serverAPI.callPluginMethod("is_rolling", {});
+		if ((isRolling.result as boolean) === false) {
+			await this.notify("Enabling replay mode", 1500, "Steam + Start to save last 30 seconds");
+			this.toggleRolling(false);
+			return;
+		}
+
 		const res = await this.serverAPI.callPluginMethod('save_rolling_recording', { clip_duration: duration, app_name: Router.MainRunningApp?.display_name});
 		let r = (res.result as number)
 		if (r > 0) {
@@ -61,61 +163,29 @@ class DeckyRecorderLogic
 			await this.serverAPI.callPluginMethod('disable_rolling', {});
 		}
 	}
-
-	handleButtonInput = async (val: any[]) => {
-		/*
-		R2 0
-		L2 1
-		R1 2
-		R2 3
-		Y  4
-		B  5
-		X  6
-		A  7
-		UP 8
-		Right 9
-		Left 10
-		Down 11
-		Select 12
-		Steam 13
-		Start 14
-		QAM  ???
-		L5 15
-		R5 16
-		Share 29 */
-		for (const inputs of val) {
-			// if (Date.now() - this.pressedAt < 2000) {
-			// 	continue;
-			// }
-			// if (inputs.ulButtons && inputs.ulButtons & (1 << 13) && inputs.ulButtons & (1 << 14)) {
-			// 	this.pressedAt = Date.now();
-			// 	(Router as any).DisableHomeAndQuickAccessButtons();
-			// 	setTimeout(() => {
-			// 		(Router as any).EnableHomeAndQuickAccessButtons();
-			// 	}, 1000)
-			// 	const isRolling = await this.serverAPI.callPluginMethod("is_rolling", {});
-			// 	if (isRolling.result as boolean) {
-			// 		await this.saveRollingRecording(30);
-			// 	} else {
-			// 		await this.notify("Enabling replay mode", 1500, "Steam + Start to save last 30 seconds");
-			// 		this.toggleRolling(false);
-			// 	}
-			// }
-  			if (inputs.ulButtons && (inputs.ulButtons & (1 << 29))) {
-				if ((this.shareDown == false)) {
-					this.shareDown = true;
-					this.pressedAt = Date.now();
-				}
-			} else if (this.shareDown == true) {
-				this.shareDown = false;
-				var now = Date.now();
-				if (now - this.pressedAt >= 500) { // hold for longer than 500 ms
-					await this.saveRollingRecording(30);
-				}
-			}
-		}
-	}
-
+	
+	/*
+	R2 0
+	L2 1
+	R1 2
+	R2 3
+	Y  4
+	B  5
+	X  6
+	A  7
+	UP 8
+	Right 9
+	Left 10
+	Down 11
+	Select 12
+	Steam 13
+	Start 14
+	QAM  ???
+	L5 15
+	R5 16
+	Share 29 */
+	shareButton: HoldDownButton = new HoldDownButton(29, this.saveRollingRecording);
+	steamStartComb: CombinedButtons = new CombinedButtons([13, 14], this.saveRollingRecording);
 }
 
 const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = ({ serverAPI, logic }) => {
@@ -332,14 +402,16 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 
 export default definePlugin((serverApi: ServerAPI) => {
 	let logic = new DeckyRecorderLogic(serverApi);
-	let input_register = window.SteamClient.Input.RegisterForControllerStateChanges(logic.handleButtonInput);
+	let steamStartCombRegister = window.SteamClient.Input.RegisterForControllerStateChanges(logic.steamStartComb.handleButtonInput);
+	let holdShareRegister = window.SteamClient.Input.RegisterForControllerStateChanges(logic.shareButton.handleButtonInput);
 	//Router.MainRunningApp?.display_name
 	return {
 		title: <div className={staticClasses.Title}>Decky Recorder</div>,
 		content: <DeckyRecorder serverAPI={serverApi} logic={logic} />,
 		icon: <FaVideo />,
 		onDismount() {
-			input_register.unregister();
+			steamStartCombRegister.unregister();
+			holdShareRegister.unregister();
 		},
 		alwaysRender: true
 	};
