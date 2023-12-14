@@ -72,11 +72,11 @@ class Plugin:
     _localFilePath: str = decky_plugin.HOME + "/Videos"
     _rollingRecordingFolder: str = "/dev/shm"
     _rollingRecordingPrefix: str = "Decky-Recorder-Rolling"
-    _fileformat: str = "mp4"
+    _fileformat: str = "mkv"
     _rolling: bool = False
     _last_clip_time: float = time.time()
     _watchdog_task = None
-    _muxer_map = {"mp4": "mp4mux", "mkv": "matroskamux", "mov": "qtmux"}
+    _muxer_map = {"mp4": "matroskamux", "mkv": "matroskamux", "mov": "qtmux"}
     _settings = None
 
     async def clear_rogue_gst_processes(self):
@@ -112,7 +112,7 @@ class Plugin:
             if app_name == "" or app_name == "null":
                 app_name = "Decky-Recorder"
 
-            muxer = Plugin._muxer_map.get(self._fileformat, "mp4mux")
+            muxer = Plugin._muxer_map.get(self._fileformat, "matroskamux")
             logger.info(f"Starting recording for {self._fileformat} with mux {muxer}")
             if await Plugin.is_capturing(self) == True:
                 logger.info("Error: Already recording")
@@ -291,7 +291,7 @@ class Plugin:
         self._audioBitrate = 192000
 
         self._localFilePath = self._settings.getSetting("output_folder", "/home/deck/Videos")
-        self._fileformat = self._settings.getSetting("format", "mp4")
+        self._fileformat = self._settings.getSetting("format", "mkv")
         self._rolling = self._settings.getSetting("rolling", False)
 
         # Need this for initialization only honestly
