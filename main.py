@@ -21,7 +21,8 @@ if not DEPSPATH.exists():
     DEPSPATH = Path(decky_plugin.DECKY_PLUGIN_DIR) / "backend/out"
 GSTPLUGINSPATH = DEPSPATH / "gstreamer-1.0"
 
-std_out_file = open(Path(decky_plugin.DECKY_PLUGIN_LOG_DIR) / "decky-recorder-std-out.log", "w")
+std_out_file_path = Path(decky_plugin.DECKY_PLUGIN_LOG_DIR) / "decky-recorder-std-out.log"
+std_out_file = open(std_out_file_path, "w")
 std_err_file = open(Path(decky_plugin.DECKY_PLUGIN_LOG_DIR) / "decky-recorder-std-err.log", "w")
 
 logger = decky_plugin.logger
@@ -93,11 +94,15 @@ class Plugin:
             try:
                 in_gm = in_gamemode()
                 is_cap = await Plugin.is_capturing(self, verbose=False)
+                std_out_lines = open(std_out_file_path, "r").readlines()
+                if std_out_lines:
+                    is_cap = is_cap and ("Freeing" not in std_out_lines[-1])
                 if not in_gm and is_cap:
                     logger.warn("Left gamemode but recording was still running, killing capture")
                     await Plugin.stop_capturing(self)
                 elif in_gm and not is_cap and self._rolling:
-                    logger.warn("Entered gamemode but recording was stopped, starting capture")
+                    logger.warn("In gamemode but recording was not working, starting capture")
+                    await Plugin.stop_capturing(self)
                     await Plugin.start_capturing(self)
             except Exception:
                 logger.exception("watchdog")
