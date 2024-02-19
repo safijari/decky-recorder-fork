@@ -1,6 +1,6 @@
 # Decky Recorder Fork
 
-Note: This repository is a clone of the original Decky Recorder repo and is actively maintained.
+Note: if you encounter green flashing, please try upgrading to preview.
 
 ### Building
 If you want to build this plugin in theory you only need to run `make init` first, fill out details in the `.env` file, and then run `make it`. You will need the following:
