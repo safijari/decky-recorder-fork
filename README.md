@@ -1,5 +1,7 @@
 # Decky Recorder Fork
 
+Original Repo: https://github.com/marissa999/decky-recorder?tab=readme-ov-file
+
 Note: if you encounter green flashing, please try upgrading to preview.
 
 ### Building
