@@ -2,8 +2,6 @@
 
 Original Repo: https://github.com/marissa999/decky-recorder?tab=readme-ov-file
 
-Note: if you encounter green flashing, please try upgrading to preview.
-
 ### Building
 If you want to build this plugin in theory you only need to run `make init` first, fill out details in the `.env` file, and then run `make it`. You will need the following:
 - node 18 (I recommend using nvm)
