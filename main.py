@@ -113,7 +113,7 @@ class Plugin:
         try:
             logger.info("Starting recording")
 
-            app_name = str(app_name).replace(":", " ")
+            app_name = str(app_name).replace(":", " ").replace("/", " ")
             if app_name == "" or app_name == "null":
                 app_name = "Decky-Recorder"
 
