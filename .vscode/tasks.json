@@ -56,7 +56,7 @@
             "dependsOn": [
                 "checkforsettings"
             ],
-            "command": "ssh deck@${config:deckip} -p ${config:deckport} ${config:deckkey} 'mkdir -p ${config:deckdir}/homebrew/pluginloader && mkdir -p ${config:deckdir}/homebrew/plugins'",
+            "command": "ssh ${config:deckuser}@${config:deckip} -p ${config:deckport} ${config:deckkey} 'mkdir -p ${config:deckdir}/homebrew/pluginloader && mkdir -p ${config:deckdir}/homebrew/plugins'",
             "problemMatcher": []
         },
         {
@@ -68,7 +68,7 @@
                 "createfolders",
                 "chmodfolders"
             ],
-            "command": "rsync -azp --delete --chmod=D0755,F0755 --rsh='ssh -p ${config:deckport} ${config:deckkey}' --exclude='.git/' --exclude='.github/' --exclude='.vscode/' --exclude='node_modules/' --exclude='src/' --exclude='*.log' --exclude='.gitignore' . deck@${config:deckip}:${config:deckdir}/homebrew/plugins/${workspaceFolderBasename}",
+            "command": "rsync -azp --delete --chmod=D0755,F0755 --rsh='ssh -p ${config:deckport} ${config:deckkey}' --exclude='.git/' --exclude='.github/' --exclude='.vscode/' --exclude='node_modules/' --exclude='src/' --exclude='*.log' --exclude='.gitignore' . ${config:deckuser}@${config:deckip}:${config:deckdir}/homebrew/plugins/${workspaceFolderBasename}",
             "problemMatcher": []
         },
         {
@@ -76,7 +76,7 @@
             "detail": "chmods folders to prevent perms issues",
             "type": "shell",
             "group": "none",
-            "command": "ssh deck@${config:deckip} -p ${config:deckport} ${config:deckkey} 'echo '${config:deckpass}' | sudo -S chmod -R ug+rw ${config:deckdir}/homebrew/'",
+            "command": "ssh ${config:deckuser}@${config:deckip} -p ${config:deckport} ${config:deckkey} 'echo '${config:deckpass}' | sudo -S chmod -R ug+rw ${config:deckdir}/homebrew/'",
             "problemMatcher": []
         },
         {
