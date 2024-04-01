@@ -520,8 +520,17 @@ class Plugin:
                     ff.write(f"file {str(f)}\n")
 
             dateTime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            rolling_directory = pathlib.Path(f"{self._localFilePath}/{app_name}")
+            logger.debug(f"Creating directory if not exists: {rolling_directory.__fspath__()}")
+            rolling_directory.mkdir(exist_ok=True)
+
+            rolling_file_name = f"{app_name}-{clip_duration}s-{dateTime}"
+            logger.debug(f"Filename for recording: {rolling_file_name}")
+            rolling_file_path = f"{rolling_directory.joinpath(rolling_file_name)}.{self._fileformat}"
+            logger.debug(f"Filepath for recording: {rolling_file_path}")
+
             ffmpeg = subprocess.Popen(
-                f'ffmpeg -hwaccel vaapi -hwaccel_output_format vaapi -vaapi_device /dev/dri/renderD128 -f concat -safe 0 -i {self._rollingRecordingFolder}/files -c copy "{self._localFilePath}/{app_name}-{clip_duration}s-{dateTime}.{self._fileformat}"',
+                f'ffmpeg -hwaccel vaapi -hwaccel_output_format vaapi -vaapi_device /dev/dri/renderD128 -f concat -safe 0 -i {self._rollingRecordingFolder}/files -c copy "{rolling_file_path}"',
                 shell=True,
                 stdout=std_out_file,
                 stderr=std_err_file,
