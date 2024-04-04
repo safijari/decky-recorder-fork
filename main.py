@@ -106,7 +106,7 @@ class Plugin:
                     await Plugin.start_capturing(self)
             except Exception:
                 logger.exception("watchdog")
-            await asyncio.sleep(5)
+            await asyncio.sleep(1.0)
 
     # Starts the capturing process
     async def start_capturing(self, app_name: str = ""):
