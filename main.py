@@ -9,6 +9,7 @@ from pathlib import Path
 from settings import SettingsManager
 import decky_plugin
 import logging
+import shutil
 
 # Get environment variable
 settingsDir = os.environ["DECKY_PLUGIN_SETTINGS_DIR"]
@@ -93,7 +94,17 @@ class Plugin:
         while True:
             try:
                 in_gm = in_gamemode()
+                if in_gm:
+                    try:
+                        shutil.rmtree((Path(decky_plugin.HOME) / ".local/share/kscreen"))
+                    except OSError as e:
+                        pass
+                    except Exception:
+                        logger.exception("path rm")
                 is_cap = await Plugin.is_capturing(self, verbose=False)
+                if not in_gm and is_cap:
+                    await Plugin.stop_capturing(self)
+                    clear_rogue_gst_processes()
                 std_out_lines = open(std_out_file_path, "r").readlines()
                 if std_out_lines:
                     is_cap = is_cap and ("Freeing" not in std_out_lines[-1])
@@ -106,7 +117,7 @@ class Plugin:
                     await Plugin.start_capturing(self)
             except Exception:
                 logger.exception("watchdog")
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(5)
 
     # Starts the capturing process
     async def start_capturing(self, app_name: str = ""):
