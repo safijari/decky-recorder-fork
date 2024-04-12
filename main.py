@@ -84,9 +84,9 @@ class Plugin:
     _deckySinkModuleName: str = "Decky-Recording-Sink"
     _echoCancelledModule: str = "NA"
     _echoCancelledAudioName: str = "Echo-Cancelled-Audio"
-    _echoCancelledAudioLoopbackModule: str = "NA"
+    _echoCancelledAudioModule: str = "NA"
     _echoCancelledMicName: str = "Echo-Cancelled-Mic"
-    _echoCancelledMicLoopbackModule: str = "NA"
+    _echoCancelledMicModule: str = "NA"
     _last_clip_time: float = time.time()
     _watchdog_task = None
     _muxer_map = {"mp4": "matroskamux", "mkv": "matroskamux", "mov": "qtmux"}
@@ -302,20 +302,20 @@ class Plugin:
         return self._micEnabled
 
     async def is_mic_attached(self):
-        is_attached = self._echoCancelledMicLoopbackModule != "NA"
+        is_attached = self._echoCancelledMicModule != "NA"
         logger.info(f"Is mic attached? {is_attached}")
         return is_attached
 
     async def attach_mic(self):
         logger.info(f"Attaching Microphone {self._echoCancelledMicName}")
 
-        self._echoCancelledMicLoopbackModule = get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName} sink={self._deckySinkModuleName}")
+        self._echoCancelledMicModule = get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName} sink={self._deckySinkModuleName}")
 
     async def detach_mic(self):
         logger.info(f"Detaching Microphone {self._echoCancelledMicName}")
 
-        get_cmd_output(f"pactl unload-module {self._echoCancelledMicLoopbackModule}")
-        self._echoCancelledMicLoopbackModule = "NA"
+        get_cmd_output(f"pactl unload-module {self._echoCancelledMicModule}")
+        self._echoCancelledMicModule = "NA"
 
     async def enable_microphone(self):
         logger.info("Enable microphone")
