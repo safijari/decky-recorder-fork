@@ -108,7 +108,7 @@ class Plugin:
                 is_cap = await Plugin.is_capturing(self, verbose=False)
                 if not in_gm and is_cap:
                     await Plugin.stop_capturing(self)
-                    Plugin.clear_rogue_gst_processes(self)
+                    await Plugin.clear_rogue_gst_processes(self)
                 std_out_lines = open(std_out_file_path, "r").readlines()
                 if std_out_lines:
                     is_cap = is_cap and ("Freeing" not in std_out_lines[-1])
@@ -189,7 +189,7 @@ class Plugin:
             if deckyRecordingSinkExists:
                 logger.info("Decky-Recording-Sink already exists, reusing")
             else:
-                Plugin.create_decky_pa_sink(self)
+                await Plugin.create_decky_pa_sink(self)
 
             cmd = (
                 cmd
@@ -223,7 +223,7 @@ class Plugin:
             await Plugin.clear_rogue_gst_processes(self)
         logger.info("Waiting finished. Recording stopped!")
 
-        Plugin.cleanup_decky_pa_sink(self)
+        await Plugin.cleanup_decky_pa_sink(self)
         return
 
     # Returns true if the plugin is currently capturing
@@ -286,12 +286,12 @@ class Plugin:
         logger.info(f"Command: {create_echo_audio_loopback_cli}")
         self._echoCancelledAudioModule = subprocess.getoutput(create_echo_audio_loopback_cli).strip()
 
-        if Plugin.is_mic_enabled(self):
-            Plugin.attach_mic(self)
+        if await Plugin.is_mic_enabled(self):
+            await Plugin.attach_mic(self)
 
     async def cleanup_decky_pa_sink(self):
-        if Plugin.is_mic_attached(self):
-            Plugin.detach_mic(self)
+        if await Plugin.is_mic_attached(self):
+            await Plugin.detach_mic(self)
 
         unload_audio_cli = f"pactl unload-module {self._echoCancelledAudioModule}"
 
@@ -440,7 +440,7 @@ class Plugin:
 
         if not await Plugin.is_capturing(self):
             logger.warn("Tried to capture recording, but capture was not started!")
-            Plugin.start_capturing(self)
+            await Plugin.start_capturing(self)
             return -1
 
         if time.time() - self._last_clip_time < 2:
