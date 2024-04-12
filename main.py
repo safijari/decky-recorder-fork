@@ -14,7 +14,6 @@ import shutil
 # Get environment variable
 settingsDir = os.environ["DECKY_PLUGIN_SETTINGS_DIR"]
 
-
 import asyncio
 
 DEPSPATH = Path(decky_plugin.DECKY_PLUGIN_DIR) / "bin"
@@ -69,6 +68,11 @@ def get_cmd_output(cmd):
     logger.info(f"Command: {cmd}")
     return subprocess.getoutput(cmd).strip()
 
+def unload_pa_modules(search_string):
+    module_list = get_cmd_output(f"pactl list short modules | grep '{search_string}' | awk '{{print $1}}'").split("\n")
+    for module_id in module_list:
+        get_cmd_output(f"pactl unload-module {module_id}")
+
 class Plugin:
     _recording_process = None
     _filepath: str = None
@@ -80,14 +84,10 @@ class Plugin:
     _fileformat: str = "mkv"
     _rolling: bool = False
     _micEnabled: bool = False
-    _deckySinkModule: str = "NA"
+    _micGain: float = 13.0
     _deckySinkModuleName: str = "Decky-Recording-Sink"
-    _standardAudioModule: str = "NA"
-    _echoCancelledModule: str = "NA"
     _echoCancelledAudioName: str = "Echo-Cancelled-Audio"
-    _echoCancelledAudioModule: str = "NA"
     _echoCancelledMicName: str = "Echo-Cancelled-Mic"
-    _echoCancelledMicModule: str = "NA"
     _last_clip_time: float = time.time()
     _watchdog_task = None
     _muxer_map = {"mp4": "matroskamux", "mkv": "matroskamux", "mov": "qtmux"}
@@ -278,7 +278,7 @@ class Plugin:
         # bluez_output.20_74_CF_F1_C0_1E.1 when using bluetooth
         logger.info(f"Creating {self._deckySinkModuleName}")
 
-        self._deckySinkModule = get_cmd_output(f"pactl load-module module-null-sink sink_name={self._deckySinkModuleName}")
+        get_cmd_output(f"pactl load-module module-null-sink sink_name={self._deckySinkModuleName}")
 
         self._standardAudioModule = get_cmd_output(f"pactl load-module module-loopback source={audio_device_output}.monitor sink={self._deckySinkModuleName}")
 
@@ -286,59 +286,34 @@ class Plugin:
             await Plugin.attach_mic(self)
 
     async def cleanup_decky_pa_sink(self):
-        if await Plugin.is_mic_attached(self):
-            await Plugin.detach_mic(self)
-
-        get_cmd_output(f"pactl unload-module {self._standardAudioModule}")
-        self._standardAudioModule = "NA"
-
-        get_cmd_output(f"pactl unload-module {self._deckySinkModule}")
-        self._deckySinkModule = "NA"
+        unload_pa_modules("Echo-Cancelled")
+        unload_pa_modules(f"{self._deckySinkModuleName}")
 
     async def is_mic_enabled(self):
         logger.info(f"Is mic enabled? {self._micEnabled}")
         return self._micEnabled
 
     async def is_mic_attached(self):
-        is_attached = self._echoCancelledMicModule != "NA"
+        is_attached = subprocess.run("pactl list modules | grep 'Echo-Cancelled'",shell=True).returncode == 0
         logger.info(f"Is mic attached? {is_attached}")
         return is_attached
 
     async def attach_mic(self):
         logger.info(f"Attaching Microphone {self._echoCancelledMicName}")
 
-        # detach standard audio
-
-        get_cmd_output(f"pactl unload-module {self._standardAudioModule}")
-        self._standardAudioModule = "NA"
-
-        # attached echo cancelled mic and audio
-
+        # attached echo cancelled mic
+        # self._echoCancelledModule = get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master=@DEFAULT_SOURCE@ sink_master=@DEFAULT_SINK@ source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_gain_control=0 digital_gain_control=1'")
         audio_device_output = get_cmd_output("pactl get-default-sink")
         mic_input = get_cmd_output("pactl get-default-source")
 
-        self._echoCancelledModule = get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master={mic_input} sink_master={audio_device_output} source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc'")
+        self._echoCancelledModule = get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master={mic_input} sink_master={audio_device_output} source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_gain_control=0 digital_gain_control=1'")
 
-        self._echoCancelledAudioModule = get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledAudioName}.monitor sink={self._deckySinkModuleName}")
-
-        self._echoCancelledMicModule = get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName} sink={self._deckySinkModuleName}")
+        get_cmd_output(f"pactl set-source-volume Echo-Cancelled-Mic {self._micGain}db")
+        get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName} sink={self._deckySinkModuleName}")
 
     async def detach_mic(self):
         logger.info(f"Detaching Microphone {self._echoCancelledMicName}")
-
-        get_cmd_output(f"pactl unload-module {self._echoCancelledModule}")
-        self._echoCancelledModule = "N/A"
-
-        get_cmd_output(f"pactl unload-module {self._echoCancelledAudioModule}")
-        self._echoCancelledAudioModule = "NA"
-
-        get_cmd_output(f"pactl unload-module {self._echoCancelledMicModule}")
-        self._echoCancelledMicModule = "NA"
-
-        # Re-attach standard audio
-        audio_device_output = subprocess.getoutput("pactl get-default-sink").strip()
-
-        self._standardAudioModule = get_cmd_output(f"pactl load-module module-loopback source={audio_device_output}.monitor sink={self._deckySinkModuleName}")
+        unload_pa_modules("Echo-Cancelled")
 
     async def enable_microphone(self):
         logger.info("Enable microphone")
@@ -359,6 +334,13 @@ class Plugin:
         self._micEnabled = False   
         await Plugin.saveConfig(self)
         logger.info("Disable mic was called end")
+    
+    async def update_mic_gain(self, new_gain: float):
+        self._micGain = float(new_gain)
+        if await Plugin.is_capturing(self):
+            if await Plugin.is_mic_attached(self):
+                get_cmd_output(f"pactl set-source-volume Echo-Cancelled-Mic {self._micGain}db")
+        await Plugin.saveConfig(self)
 
     # Sets the current mode, supported modes are: localFile
     async def set_current_mode(self, mode: str):
@@ -414,6 +396,7 @@ class Plugin:
         self._fileformat = self._settings.getSetting("format", "mkv")
         self._rolling = self._settings.getSetting("rolling", False)
         self._micEnabled = self._settings.getSetting("mic_enabled", False)
+        self._micGain = self._settings.getSetting("mic_gain", 13.0)
 
         # Need this for initialization only honestly
         await Plugin.saveConfig(self)
@@ -425,6 +408,7 @@ class Plugin:
         self._settings.setSetting("output_folder", self._localFilePath)
         self._settings.setSetting("rolling", self._rolling)
         self._settings.setSetting("mic_enabled", self._micEnabled)
+        self._settings.setSetting("mic_gain", self._micGain)
         return
 
     async def _main(self):

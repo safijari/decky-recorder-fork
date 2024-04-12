@@ -9,7 +9,8 @@ import {
 	DropdownOption,
 	SingleDropdownOption,
 	Router,
-	ToggleField
+	ToggleField,
+	SliderField
 } from "decky-frontend-lib";
 
 import {
@@ -71,6 +72,10 @@ class DeckyRecorderLogic
 		}
 	}
 
+	updateMicGain = async (newMicGain: number) => {
+		await this.serverAPI.callPluginMethod('update_mic_gain', {new_gain: newMicGain});
+	}
+
 	handleButtonInput = async (val: any[]) => {
 		/*
 		R2 0
@@ -124,6 +129,8 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 	const [microphoneEnabled, setMicrophone] = useState<boolean>(false);
 
 	const [buttonsEnabled, setButtonsEnabled] = useState<boolean>(true);
+
+	const [micGain, setMicGain] = useState<number>(13);
 
 	// const audioBitrateOption128 = { data: "128", label: "128 Kbps" } as SingleDropdownOption
 	// const audioBitrateOption192 = { data: "192", label: "192 Kbps" } as SingleDropdownOption
@@ -247,6 +254,10 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 		logic.toggleMicrophone(microphoneEnabled);
 	}
 
+	const changeMicGain = async () => {
+		logic.updateMicGain(micGain)
+	}
+
 	const getFilePickerText = (): string => {
 		return "Recordings will be saved to " + localFilePath;
 	}
@@ -281,6 +292,22 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 					onChange={(e) => { setMicrophone(e); microphoneToggled(); }}
 				/>
 				<div>Enable recording of echo-cancelled microphone</div>
+				{
+					(microphoneEnabled) ?
+					<div>
+						<SliderField
+							label="Microphone Gain (default 13db)"
+							value={micGain}
+							resetValue={13}
+							min={0}
+							max={20}
+							step={1}
+							showValue={true}
+							editableValue={true}
+							onChange={(e) => { setMicGain(e); changeMicGain(); }}
+						/>
+					</div> : null
+				}
 				{(!isRolling) ?
 					<div>
 
