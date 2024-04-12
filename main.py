@@ -65,7 +65,6 @@ def in_gamemode():
             pass
     return False
 
-
 class Plugin:
     _recording_process = None
     _filepath: str = None
@@ -76,6 +75,9 @@ class Plugin:
     _rollingRecordingPrefix: str = "Decky-Recorder-Rolling"
     _fileformat: str = "mkv"
     _rolling: bool = False
+    _micEnabled: bool = False
+    _echoCancelledMicModule: str = "NA"
+    _echoCancelledMicLoopbackModule: str = "NA"
     _last_clip_time: float = time.time()
     _watchdog_task = None
     _muxer_map = {"mp4": "matroskamux", "mkv": "matroskamux", "mov": "qtmux"}
@@ -189,12 +191,14 @@ class Plugin:
                     monitor = line + ".monitor"
                     break
 
-            deckyRecordingSinkExists = subprocess.run("pactl list sinks | grep 'Sink Name: Decky-Recording-Sink'").returncode == 0
+            deckyRecordingSinkExists = subprocess.run("pactl list sinks | grep 'Decky-Recording-Sink'", shell=True).returncode == 0
 
             if not deckyRecordingSinkExists:
-                subprocess.run("pactl load-module module-null-sink sink_name=Decky-Recording-Sink")
-                subprocess.run(f"pactl load-module module-loopback source={monitor} sink=Decky-Recording-Sink")
-                subprocess.run(f"pactl load-module module-loopback sink=Decky-Recording-Sink")
+                subprocess.run("pactl load-module module-null-sink sink_name=Decky-Recording-Sink", shell=True)
+                subprocess.run(f"pactl load-module module-loopback source={monitor} sink=Decky-Recording-Sink", shell=True)
+
+                if is_mic_enabled(self):
+                    attach_mic(self)
 
             cmd = (
                 cmd
@@ -265,6 +269,50 @@ class Plugin:
             logger.exception("Failed to delete rolling recording buffer files")
         logger.info("Disable rolling was called end")
 
+    async def is_mic_enabled(self):
+        logger.info(f"Is mic enabled? {self._micEnabled}")
+        await Plugin.clear_rogue_gst_processes(self)
+        return self._micEnabled
+
+    async def is_mic_attached(self):
+        is_attached = self._echoCancelledMicModule != "NA" and self._echoCancelledMicLoopbackModule != "NA"
+        logger.info(f"Is mic attached? {is_attached}")
+        return is_attached
+
+    async def attach_mic(self):
+        mic_input = subprocess.getoutput("pactl get-default-source").strip()
+
+        self._echoCancelledMicModule = subprocess.getoutput(f"pactl load-module module-echo-cancel use_master_format=1 source_master={mic_input} source_name=Echo-Cancelled-Mic aec_method='webrtc' aec_args='\"beamforming=1 mic_geometry=-0.06,0,0,0.06,0,0\"'").strip()
+        self._echoCancelledMicLoopbackModule = subprocess.getoutput(f"pactl load-module module-loopback source=Echo-Cancelled-Mic sink=Decky-Recording-Sink").strip()
+
+    async def detach_mic(self):
+        subprocess.run(f"pactl unload-module {self._echoCancelledMicLoopbackModule}", shell=True)
+        subprocess.run(f"pactl unload-module {self._echoCancelledMicModule}", shell=True)
+        # Reset mic modules
+        self._echoCancelledMicModule = "NA"
+        self._echoCancelledMicLoopbackModule = "NA"
+
+    async def enable_microphone(self):
+        logger.info("Enable microphone")
+        # if capturing, stop that capture, then re-enable with rolling
+        if await Plugin.is_capturing(self):
+            if not await is_mic_attached(self):
+                await attach_mic(self)
+        self._micEnabled = True
+        await Plugin.saveConfig(self)
+        logger.info("Enable mic was called end")
+
+
+    async def disable_microphone(self):
+        logger.info("Disable microphone")
+        # if capturing, stop that capture, then re-enable with rolling
+        if await Plugin.is_capturing(self):
+            if await is_mic_attached(self):
+                await detach_mic(self)
+        self._micEnabled = False   
+        await Plugin.saveConfig(self)
+        logger.info("Disable mic was called end")
+
     # Sets the current mode, supported modes are: localFile
     async def set_current_mode(self, mode: str):
         logger.info("New mode: " + mode)
@@ -318,6 +366,7 @@ class Plugin:
         self._localFilePath = self._settings.getSetting("output_folder", "/home/deck/Videos")
         self._fileformat = self._settings.getSetting("format", "mkv")
         self._rolling = self._settings.getSetting("rolling", False)
+        self._micEnabled = self._settings.getSetting("mic_enabled", False)
 
         # Need this for initialization only honestly
         await Plugin.saveConfig(self)
@@ -328,6 +377,7 @@ class Plugin:
         self._settings.setSetting("format", self._fileformat)
         self._settings.setSetting("output_folder", self._localFilePath)
         self._settings.setSetting("rolling", self._rolling)
+        self._settings.setSetting("mic_enabled", self._micEnabled)
         return
 
     async def _main(self):

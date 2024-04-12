@@ -63,6 +63,14 @@ class DeckyRecorderLogic
 		}
 	}
 
+	toggleMicrophone = async (microphoneEnabled: boolean) => {
+		if (!microphoneEnabled) {
+			await this.serverAPI.callPluginMethod('enable_microphone', {});
+		} else {
+			await this.serverAPI.callPluginMethod('disable_microphone', {});
+		}
+	}
+
 	handleButtonInput = async (val: any[]) => {
 		/*
 		R2 0
@@ -113,6 +121,7 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 	// const [mode, setMode] = useState<string>("localFile");
 
 	const [isRolling, setRolling] = useState<boolean>(false);
+	const [microphoneEnabled, setMicrophone] = useState<boolean>(false);
 
 	const [buttonsEnabled, setButtonsEnabled] = useState<boolean>(true);
 
@@ -231,6 +240,10 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 		setRolling(!isRolling);
 	}
 
+	const microphoneToggled = async () => {
+		logic.toggleMicrophone(microphoneEnabled);
+	}
+
 	const getFilePickerText = (): string => {
 		return "Recordings will be saved to " + localFilePath;
 	}
@@ -259,6 +272,12 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 					onChange={(e) => { setRolling(e); rollingToggled(); }}
 				/>
 				<div>Steam + Start saves a 30 second clip in replay mode. If replay mode is off, this shortcut will enable it.</div>
+				<ToggleField
+					label="Enable Microphone Recording"
+					checked={microphoneEnabled}
+					onChange={(e) => { setMicrophone(e); microphoneToggled(); }}
+				/>
+				<div>Enable recording of echo-cancelled microphone</div>
 				{(!isRolling) ?
 					<div>
 
