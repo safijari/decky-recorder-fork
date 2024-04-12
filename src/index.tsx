@@ -76,6 +76,10 @@ class DeckyRecorderLogic
 		await this.serverAPI.callPluginMethod('update_mic_gain', {new_gain: newMicGain});
 	}
 
+	getParsedMicSources = async () => {
+		return JSON.parse((await this.serverAPI.callPluginMethod('get_mic_sources', {})).result as string);
+	}
+
 	handleButtonInput = async (val: any[]) => {
 		/*
 		R2 0
@@ -131,6 +135,10 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 	const [buttonsEnabled, setButtonsEnabled] = useState<boolean>(true);
 
 	const [micGain, setMicGain] = useState<number>(13);
+
+	const [micSource, setMicSource] = useState<DropdownOption>({data: "@DEFAULT_SOURCE@", label: "@DEFAULT_SOURCE@"});
+
+	const [micSourcesList, setMicSourcesList] = useState<DropdownOption[]>([{data: "@DEFAULT_SOURCE@", label: "@DEFAULT_SOURCE@"}]);
 
 	// const audioBitrateOption128 = { data: "128", label: "128 Kbps" } as SingleDropdownOption
 	// const audioBitrateOption192 = { data: "192", label: "192 Kbps" } as SingleDropdownOption
@@ -261,6 +269,11 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 		logic.updateMicGain(micGain)
 	}
 
+	const getMicSources = async () => {
+		const parsedMicSources = await logic.getParsedMicSources()
+		setMicSourcesList(parsedMicSources)
+	}
+
 	const getFilePickerText = (): string => {
 		return "Recordings will be saved to " + localFilePath;
 	}
@@ -309,6 +322,23 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 							editableValue={true}
 							onChange={(e) => { setMicGain(e); changeMicGain(); }}
 						/>
+						<PanelSectionRow>
+							<Dropdown
+								menuLabel="Select the Microphone Source"
+								strDefaultLabel={micSource.label as string}
+								rgOptions={micSourcesList}
+								selectedOption={micSource}
+								onMenuWillOpen={(showMenu: () => void) => {
+									getMicSources()
+									showMenu()
+								}}
+								onChange={(newSource) => {
+									setMicSource(newSource.data);
+									serverAPI.callPluginMethod('set_mic_source', { new_mic_source: newSource.data });
+								}}
+							/>
+						</PanelSectionRow>
+						<div>Select the Microphone Source</div>
 					</div> : null
 				}
 				{(!isRolling) ?

@@ -10,6 +10,7 @@ from settings import SettingsManager
 import decky_plugin
 import logging
 import shutil
+import json
 
 # Get environment variable
 settingsDir = os.environ["DECKY_PLUGIN_SETTINGS_DIR"]
@@ -85,6 +86,7 @@ class Plugin:
     _rolling: bool = False
     _micEnabled: bool = False
     _micGain: float = 13.0
+    _micSource: float = "@DEFAULT_SOURCE@"
     _deckySinkModuleName: str = "Decky-Recording-Sink"
     _echoCancelledAudioName: str = "Echo-Cancelled-Audio"
     _echoCancelledMicName: str = "Echo-Cancelled-Mic"
@@ -303,7 +305,7 @@ class Plugin:
         logger.info(f"Attaching Microphone {self._echoCancelledMicName}")
 
         # attached echo cancelled mic
-        get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master=@DEFAULT_SOURCE@ sink_master=@DEFAULT_SINK@ source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_gain_control=0 digital_gain_control=1'")
+        get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master=@DEFAULT_SOURCE@ sink_master={self._micSource} source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_gain_control=0 digital_gain_control=1'")
 
         get_cmd_output(f"pactl set-source-volume Echo-Cancelled-Mic {self._micGain}db")
         get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName} sink={self._deckySinkModuleName}")
@@ -342,6 +344,20 @@ class Plugin:
             if await Plugin.is_mic_attached(self):
                 get_cmd_output(f"pactl set-source-volume Echo-Cancelled-Mic {self._micGain}db")
         await Plugin.saveConfig(self)
+
+    async def get_mic_sources(self):
+        logger.info(f"Getting available mic sources")
+        raw_sources_json = get_cmd_output("pactl list short sources | awk '{print $2}' | jq -Rnc '[inputs | {data: ., label: .}]'")
+        sources_json = json.loads(raw_sources_json)
+        sources_json.insert(0,{"data": "@DEFAULT_SOURCE@", "label": "@DEFAULT_SOURCE"})
+        return json.dumps(sources_json)
+
+    async def set_mic_source(self, new_mic_source: str):
+        logger.info(f"Setting new mic source: {new_mic_source}")
+        self._micSource = new_mic_source
+        if await Plugin.is_mic_enabled(self):
+            await Plugin.detach_mic(self)
+            await Plugin.attach_mic(self)
 
     # Sets the current mode, supported modes are: localFile
     async def set_current_mode(self, mode: str):
