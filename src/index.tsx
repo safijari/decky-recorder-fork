@@ -158,6 +158,9 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 		const getMicEnabled = await serverAPI.callPluginMethod('is_mic_enabled', {});
 		setMicrophone(getMicEnabled.result as boolean);
 
+		const getMicGain = await serverAPI.callPluginMethod('get_mic_gain', {});
+		setMicGain(getMicGain.result as number);
+
 		// const getModeResponse = await serverAPI.callPluginMethod('get_current_mode', {});
 		// setMode(getModeResponse.result as string);
 

@@ -302,14 +302,11 @@ class Plugin:
         logger.info(f"Attaching Microphone {self._echoCancelledMicName}")
 
         # attached echo cancelled mic
-        # self._echoCancelledModule = get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master=@DEFAULT_SOURCE@ sink_master=@DEFAULT_SINK@ source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_gain_control=0 digital_gain_control=1'")
-        audio_device_output = get_cmd_output("pactl get-default-sink")
-        mic_input = get_cmd_output("pactl get-default-source")
-
-        self._echoCancelledModule = get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master={mic_input} sink_master={audio_device_output} source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_gain_control=0 digital_gain_control=1'")
+        get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master=@DEFAULT_SOURCE@ sink_master=@DEFAULT_SINK@ source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_gain_control=0 digital_gain_control=1'")
 
         get_cmd_output(f"pactl set-source-volume Echo-Cancelled-Mic {self._micGain}db")
         get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName} sink={self._deckySinkModuleName}")
+        get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledAudioName}.monitor sink={self._deckySinkModuleName}")
 
     async def detach_mic(self):
         logger.info(f"Detaching Microphone {self._echoCancelledMicName}")
@@ -335,6 +332,9 @@ class Plugin:
         await Plugin.saveConfig(self)
         logger.info("Disable mic was called end")
     
+    async def get_mic_gain(self):
+        return self._micGain
+
     async def update_mic_gain(self, new_gain: float):
         self._micGain = float(new_gain)
         if await Plugin.is_capturing(self):
