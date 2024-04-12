@@ -185,7 +185,7 @@ class Plugin:
             deckyRecordingSinkExists = subprocess.run("pactl list sinks | grep 'Decky-Recording-Sink'", shell=True).returncode == 0
 
             if deckyRecordingSinkExists:
-                print("Decky-Recording-Sink already exists, reusing")
+                logger.info("Decky-Recording-Sink already exists, reusing")
             else:
                 Plugin.create_decky_pa_sink(self)
 
@@ -274,8 +274,11 @@ class Plugin:
                 monitor = line + ".monitor"
                 break
 
-        print("Creating Decky-Recording-Sink")
+        logger.info("Creating Decky-Recording-Sink")
+        logger.info("Command: pactl load-module module-null-sink sink_name=Decky-Recording-Sink")
         self._deckySinkModule = subprocess.getoutput("pactl load-module module-null-sink sink_name=Decky-Recording-Sink")
+
+        logger.info(f"Command: pactl load-module module-loopback source={monitor} sink=Decky-Recording-Sink")
         self._audioLoopbackModule = subprocess.getoutput(f"pactl load-module module-loopback source={monitor} sink=Decky-Recording-Sink")
         if Plugin.is_mic_enabled(self):
             Plugin.attach_mic(self)
@@ -283,7 +286,9 @@ class Plugin:
     async def cleanup_decky_pa_sink(self):
         if Plugin.is_mic_attached(self):
             Plugin.detach_mic(self)
+        logger.info(f"Command: pactl unload-module {self._audioLoopbackModule}")
         subprocess.getoutput(f"pactl unload-module {self._audioLoopbackModule}")
+        logger.info(f"pactl unload-module {self._deckySinkModule}")
         subprocess.getoutput(f"pactl unload-module {self._deckySinkModule}")
 
     async def is_mic_enabled(self):
@@ -297,14 +302,23 @@ class Plugin:
 
     async def attach_mic(self):
         mic_input = subprocess.getoutput("pactl get-default-source").strip()
-        print(f"Attaching Microphone {mic_input}")
+        logger.info(f"Attaching Microphone {mic_input}")
 
-        self._echoCancelledMicModule = subprocess.getoutput(f"pactl load-module module-echo-cancel use_master_format=1 source_master={mic_input} source_name=Echo-Cancelled-Mic aec_method='webrtc' aec_args='\"beamforming=1 mic_geometry=-0.06,0,0,0.06,0,0\"'").strip()
+        logger.info(f"Command: pactl load-module module-echo-cancel use_master_format=1 source_master={mic_input} source_name=Echo-Cancelled-Mic aec_method='webrtc'")
+        self._echoCancelledMicModule = subprocess.getoutput(f"pactl load-module module-echo-cancel use_master_format=1 source_master={mic_input} source_name=Echo-Cancelled-Mic aec_method='webrtc'").strip()
+        logger.info(f"New module for echoMicModule {self._echoCancelledMicModule}")
+
+        logger.info(f"Command: pactl load-module module-loopback source=Echo-Cancelled-Mic sink=Decky-Recording-Sink")
         self._echoCancelledMicLoopbackModule = subprocess.getoutput(f"pactl load-module module-loopback source=Echo-Cancelled-Mic sink=Decky-Recording-Sink").strip()
+        logger.info(f"New module for echoMicLoopbackModule {self._echoCancelledMicLoopbackModule}")
 
     async def detach_mic(self):
-        subprocess.run(f"pactl unload-module {self._echoCancelledMicLoopbackModule}", shell=True)
+        logger.info(f"Command: pactl unload-module {self._echoCancelledMicLoopbackModule}")
+        subprocess.run(f"Command: pactl unload-module {self._echoCancelledMicLoopbackModule}", shell=True)
+
+        logger.info(f"pactl unload-module {self._echoCancelledMicModule}")
         subprocess.run(f"pactl unload-module {self._echoCancelledMicModule}", shell=True)
+
         # Reset mic modules
         self._echoCancelledMicModule = "NA"
         self._echoCancelledMicLoopbackModule = "NA"
