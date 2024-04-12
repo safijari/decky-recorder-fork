@@ -76,7 +76,9 @@ class Plugin:
     _fileformat: str = "mkv"
     _rolling: bool = False
     _micEnabled: bool = False
-    _echoCancelledMicModule: str = "NA"
+    _deckySinkModule: str = "NA"
+    _echoCancelledModule: str = "NA"
+    _echoCancelledAudioLoopbackModule: str = "NA"
     _echoCancelledMicLoopbackModule: str = "NA"
     _last_clip_time: float = time.time()
     _watchdog_task = None
@@ -263,65 +265,68 @@ class Plugin:
     async def create_decky_pa_sink(self):
         logger.info("Making audio pipeline")
         # Creates audio pipeline
-        audio_device_output = subprocess.getoutput("pactl get-default-sink")
+        audio_device_output = subprocess.getoutput("pactl get-default-sink").strip()
+        mic_input = subprocess.getoutput("pactl get-default-source").strip()
         # expected output: alsa_output.pci-0000_04_00.5-platform-acp5x_mach.0.HiFi__hw_acp5x_1__sink when using internal speaker
         # bluez_output.20_74_CF_F1_C0_1E.1 when using bluetooth
-        logger.info(f"Audio device output {audio_device_output}")
-
-        monitor = ".monitor"
-        for line in audio_device_output.split("\n"):
-            if "alsa_output" in line or "bluez_" in line:
-                monitor = line + ".monitor"
-                break
-
         logger.info("Creating Decky-Recording-Sink")
-        logger.info("Command: pactl load-module module-null-sink sink_name=Decky-Recording-Sink")
-        self._deckySinkModule = subprocess.getoutput("pactl load-module module-null-sink sink_name=Decky-Recording-Sink")
 
-        logger.info(f"Command: pactl load-module module-loopback source={monitor} sink=Decky-Recording-Sink")
-        self._audioLoopbackModule = subprocess.getoutput(f"pactl load-module module-loopback source={monitor} sink=Decky-Recording-Sink")
+        create_null_sink_cli = "pactl load-module module-null-sink sink_name=Decky-Recording-Sink"
+
+        logger.info(f"Command: {create_null_sink_cli}")
+        self._deckySinkModule = subprocess.getoutput(create_null_sink_cli).strip()
+
+        create_echo_sink_cli = f"pactl load-module module-echo-cancel use_master_format=1 source_master={mic_input} sink_master={audio_device_output} source_name=Echo-Cancelled-Mic sink_name=Echo-Cancelled-Speaker aec_method='webrtc'"
+
+        logger.info(f"Command: {create_echo_sink_cli}")
+        self._echoCancelledModule = subprocess.getoutput(create_echo_sink_cli).strip()
+
+        create_echo_audio_loopback_cli = f"pactl load-module module-loopback source=Echo-Cancelled-Speaker.monitor sink=Decky-Recording-Sink"
+
+        logger.info(f"Command: {create_echo_audio_loopback_cli}")
+        self._echoCancelledAudioModule = subprocess.getoutput(create_echo_audio_loopback_cli).strip()
+
         if Plugin.is_mic_enabled(self):
             Plugin.attach_mic(self)
 
     async def cleanup_decky_pa_sink(self):
         if Plugin.is_mic_attached(self):
             Plugin.detach_mic(self)
-        logger.info(f"Command: pactl unload-module {self._audioLoopbackModule}")
-        subprocess.getoutput(f"pactl unload-module {self._audioLoopbackModule}")
-        logger.info(f"pactl unload-module {self._deckySinkModule}")
-        subprocess.getoutput(f"pactl unload-module {self._deckySinkModule}")
+
+        unload_audio_cli = f"pactl unload-module {self._echoCancelledAudioModule}"
+
+        logger.info(f"Command: {unload_audio_cli}")
+        subprocess.getoutput(unload_audio_cli)
+
+        unload_decky_cli = f"pactl unload-module {self._deckySinkModule}"
+
+        logger.info(f"Command: {unload_decky_cli}")
+        subprocess.getoutput(unload_decky_cli)
 
     async def is_mic_enabled(self):
         logger.info(f"Is mic enabled? {self._micEnabled}")
         return self._micEnabled
 
     async def is_mic_attached(self):
-        is_attached = self._echoCancelledMicModule != "NA" and self._echoCancelledMicLoopbackModule != "NA"
+        is_attached = self._echoCancelledMicModule != "NA"
         logger.info(f"Is mic attached? {is_attached}")
         return is_attached
 
     async def attach_mic(self):
-        mic_input = subprocess.getoutput("pactl get-default-source").strip()
-        logger.info(f"Attaching Microphone {mic_input}")
+        logger.info(f"Attaching Microphone Echo-Cancelled-Mic")
 
-        logger.info(f"Command: pactl load-module module-echo-cancel use_master_format=1 source_master={mic_input} source_name=Echo-Cancelled-Mic aec_method='webrtc'")
-        self._echoCancelledMicModule = subprocess.getoutput(f"pactl load-module module-echo-cancel use_master_format=1 source_master={mic_input} source_name=Echo-Cancelled-Mic aec_method='webrtc'").strip()
-        logger.info(f"New module for echoMicModule {self._echoCancelledMicModule}")
+        mic_loopback_cli = "pactl load-module module-loopback source=Echo-Cancelled-Mic sink=Decky-Recording-Sink"
 
-        logger.info(f"Command: pactl load-module module-loopback source=Echo-Cancelled-Mic sink=Decky-Recording-Sink")
-        self._echoCancelledMicLoopbackModule = subprocess.getoutput(f"pactl load-module module-loopback source=Echo-Cancelled-Mic sink=Decky-Recording-Sink").strip()
-        logger.info(f"New module for echoMicLoopbackModule {self._echoCancelledMicLoopbackModule}")
+        logger.info(f"Command: {mic_loopback_cli}")
+        self._echoCancelledMicLoopbackModule = subprocess.getoutput(mic_loopback_cli).strip()
 
     async def detach_mic(self):
-        logger.info(f"Command: pactl unload-module {self._echoCancelledMicLoopbackModule}")
-        subprocess.run(f"Command: pactl unload-module {self._echoCancelledMicLoopbackModule}", shell=True)
+        logger.info(f"Detaching Microphone Echo-Cancelled-Mic")
 
-        logger.info(f"pactl unload-module {self._echoCancelledMicModule}")
-        subprocess.run(f"pactl unload-module {self._echoCancelledMicModule}", shell=True)
+        mic_loopback_cli = "pactl unload-module {self._echoCancelledMicLoopbackModule}"
 
-        # Reset mic modules
-        self._echoCancelledMicModule = "NA"
-        self._echoCancelledMicLoopbackModule = "NA"
+        logger.info(f"Command: {mic_loopback_cli}")
+        subprocess.run(mic_loopback_cli, shell=True)
 
     async def enable_microphone(self):
         logger.info("Enable microphone")
