@@ -106,7 +106,7 @@ class Plugin:
                 is_cap = await Plugin.is_capturing(self, verbose=False)
                 if not in_gm and is_cap:
                     await Plugin.stop_capturing(self)
-                    clear_rogue_gst_processes()
+                    Plugin.clear_rogue_gst_processes()
                 std_out_lines = open(std_out_file_path, "r").readlines()
                 if std_out_lines:
                     is_cap = is_cap and ("Freeing" not in std_out_lines[-1])
@@ -193,12 +193,16 @@ class Plugin:
 
             deckyRecordingSinkExists = subprocess.run("pactl list sinks | grep 'Decky-Recording-Sink'", shell=True).returncode == 0
 
-            if not deckyRecordingSinkExists:
+            if deckyRecordingSinkExists:
+                print("Decky-Recording-Sink already exists, reusing")
+            else:
+                print("Creating Decky-Recording-Sink")
                 subprocess.run("pactl load-module module-null-sink sink_name=Decky-Recording-Sink", shell=True)
                 subprocess.run(f"pactl load-module module-loopback source={monitor} sink=Decky-Recording-Sink", shell=True)
 
                 if Plugin.is_mic_enabled(self):
-                    Plugin.attach_mic(self)
+                    if not Plugin.is_mic_attached(self):
+                        Plugin.attach_mic(self)
 
             cmd = (
                 cmd
@@ -231,6 +235,11 @@ class Plugin:
             logger.warn("Could not interrupt gstreamer, killing instead")
             await Plugin.clear_rogue_gst_processes(self)
         logger.info("Waiting finished. Recording stopped!")
+
+        if Plugin.is_mic_attached(self):
+            Plugin.detach_mic(self)
+
+        Plugin.remove_decky_sink(self)
 
         return
 
