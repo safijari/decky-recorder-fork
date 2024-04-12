@@ -347,9 +347,14 @@ class Plugin:
 
     async def get_mic_sources(self):
         logger.info(f"Getting available mic sources")
-        raw_sources_json = get_cmd_output("pactl list short sources | awk '{print $2}' | jq -Rnc '[inputs | {data: ., label: .}]'")
-        sources_json = json.loads(raw_sources_json)
-        sources_json.insert(0,{"data": "@DEFAULT_SOURCE@", "label": "@DEFAULT_SOURCE"})
+        raw_sources = get_cmd_output("pactl list short sources | awk '{print $2}'").split("\n")
+        sources_json = [{"data": "@DEFAULT_SOURCE@", "label": "@DEFAULT_SOURCE@"}]
+        for source in raw_sources:
+            # Stop recursive pointing
+            if "Echo" not in source and "monitor" not in source and "Decky" not in source:
+                sources_json.append({"data": source, "label": source})
+
+        logger.info(json.dumps(sources_json))
         return json.dumps(sources_json)
 
     async def set_mic_source(self, new_mic_source: str):
