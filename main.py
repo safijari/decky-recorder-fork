@@ -106,7 +106,7 @@ class Plugin:
                 is_cap = await Plugin.is_capturing(self, verbose=False)
                 if not in_gm and is_cap:
                     await Plugin.stop_capturing(self)
-                    Plugin.clear_rogue_gst_processes()
+                    Plugin.clear_rogue_gst_processes(self)
                 std_out_lines = open(std_out_file_path, "r").readlines()
                 if std_out_lines:
                     is_cap = is_cap and ("Freeing" not in std_out_lines[-1])
@@ -182,31 +182,12 @@ class Plugin:
                 logger.info(f"Mode {self._mode} does not exist")
                 return
 
-            logger.info("Making audio pipeline")
-            # Creates audio pipeline
-            audio_device_output = subprocess.getoutput("pactl get-default-sink")
-            # expected output: alsa_output.pci-0000_04_00.5-platform-acp5x_mach.0.HiFi__hw_acp5x_1__sink when using internal speaker
-            # bluez_output.20_74_CF_F1_C0_1E.1 when using bluetooth
-            logger.info(f"Audio device output {audio_device_output}")
-
-            monitor = ".monitor"
-            for line in audio_device_output.split("\n"):
-                if "alsa_output" in line or "bluez_" in line:
-                    monitor = line + ".monitor"
-                    break
-
             deckyRecordingSinkExists = subprocess.run("pactl list sinks | grep 'Decky-Recording-Sink'", shell=True).returncode == 0
 
             if deckyRecordingSinkExists:
                 print("Decky-Recording-Sink already exists, reusing")
             else:
-                print("Creating Decky-Recording-Sink")
-                subprocess.run("pactl load-module module-null-sink sink_name=Decky-Recording-Sink", shell=True)
-                subprocess.run(f"pactl load-module module-loopback source={monitor} sink=Decky-Recording-Sink", shell=True)
-
-                if Plugin.is_mic_enabled(self):
-                    if not Plugin.is_mic_attached(self):
-                        Plugin.attach_mic(self)
+                Plugin.create_decky_pa_sink(self)
 
             cmd = (
                 cmd
@@ -240,11 +221,7 @@ class Plugin:
             await Plugin.clear_rogue_gst_processes(self)
         logger.info("Waiting finished. Recording stopped!")
 
-        if Plugin.is_mic_attached(self):
-            Plugin.detach_mic(self)
-
-        Plugin.remove_decky_sink(self)
-
+        Plugin.cleanup_decky_pa_sink(self)
         return
 
     # Returns true if the plugin is currently capturing
@@ -283,9 +260,34 @@ class Plugin:
             logger.exception("Failed to delete rolling recording buffer files")
         logger.info("Disable rolling was called end")
 
+    async def create_decky_pa_sink(self):
+        logger.info("Making audio pipeline")
+        # Creates audio pipeline
+        audio_device_output = subprocess.getoutput("pactl get-default-sink")
+        # expected output: alsa_output.pci-0000_04_00.5-platform-acp5x_mach.0.HiFi__hw_acp5x_1__sink when using internal speaker
+        # bluez_output.20_74_CF_F1_C0_1E.1 when using bluetooth
+        logger.info(f"Audio device output {audio_device_output}")
+
+        monitor = ".monitor"
+        for line in audio_device_output.split("\n"):
+            if "alsa_output" in line or "bluez_" in line:
+                monitor = line + ".monitor"
+                break
+
+        print("Creating Decky-Recording-Sink")
+        self._deckySinkModule = subprocess.getoutput("pactl load-module module-null-sink sink_name=Decky-Recording-Sink")
+        self._audioLoopbackModule = subprocess.getoutput(f"pactl load-module module-loopback source={monitor} sink=Decky-Recording-Sink")
+        if Plugin.is_mic_enabled(self):
+            Plugin.attach_mic(self)
+
+    async def cleanup_decky_pa_sink(self):
+        if Plugin.is_mic_attached(self):
+            Plugin.detach_mic(self)
+        subprocess.getoutput(f"pactl unload-module {self._audioLoopbackModule}")
+        subprocess.getoutput(f"pactl unload-module {self._deckySinkModule}")
+
     async def is_mic_enabled(self):
         logger.info(f"Is mic enabled? {self._micEnabled}")
-        await Plugin.clear_rogue_gst_processes(self)
         return self._micEnabled
 
     async def is_mic_attached(self):
@@ -309,7 +311,6 @@ class Plugin:
 
     async def enable_microphone(self):
         logger.info("Enable microphone")
-        # if capturing, stop that capture, then re-enable with rolling
         if await Plugin.is_capturing(self):
             if not await Plugin.is_mic_attached(self):
                 await Plugin.attach_mic(self)
