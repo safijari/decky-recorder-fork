@@ -65,6 +65,10 @@ def in_gamemode():
             pass
     return False
 
+def get_cmd_output(cmd):
+    logger.info(f"Command: {cmd}")
+    return subprocess.getoutput(cmd).strip()
+
 class Plugin:
     _recording_process = None
     _filepath: str = None
@@ -77,8 +81,11 @@ class Plugin:
     _rolling: bool = False
     _micEnabled: bool = False
     _deckySinkModule: str = "NA"
+    _deckySinkModuleName: str = "Decky-Recording-Sink"
     _echoCancelledModule: str = "NA"
+    _echoCancelledAudioName: str = "Echo-Cancelled-Audio"
     _echoCancelledAudioLoopbackModule: str = "NA"
+    _echoCancelledMicName: str = "Echo-Cancelled-Mic"
     _echoCancelledMicLoopbackModule: str = "NA"
     _last_clip_time: float = time.time()
     _watchdog_task = None
@@ -184,16 +191,16 @@ class Plugin:
                 logger.info(f"Mode {self._mode} does not exist")
                 return
 
-            deckyRecordingSinkExists = subprocess.run("pactl list sinks | grep 'Decky-Recording-Sink'", shell=True).returncode == 0
+            deckyRecordingSinkExists = subprocess.run(f"pactl list sinks | grep '{self._deckySinkModuleName}'", shell=True).returncode == 0
 
             if deckyRecordingSinkExists:
-                logger.info("Decky-Recording-Sink already exists, reusing")
+                logger.info(f"{self._deckySinkModuleName} already exists, reusing")
             else:
                 await Plugin.create_decky_pa_sink(self)
 
             cmd = (
                 cmd
-                + f' pulsesrc device="Decky-Recording-Sink.monitor" ! audio/x-raw, channels=2 ! audioconvert ! lamemp3enc target=bitrate bitrate={self._audioBitrate} cbr=true ! sink.audio_0'
+                + f' pulsesrc device="{self._deckySinkModuleName}.monitor" ! audio/x-raw, channels=2 ! audioconvert ! lamemp3enc target=bitrate bitrate={self._audioBitrate} cbr=true ! sink.audio_0'
             )
 
             # Starts the capture process
@@ -269,22 +276,13 @@ class Plugin:
         mic_input = subprocess.getoutput("pactl get-default-source").strip()
         # expected output: alsa_output.pci-0000_04_00.5-platform-acp5x_mach.0.HiFi__hw_acp5x_1__sink when using internal speaker
         # bluez_output.20_74_CF_F1_C0_1E.1 when using bluetooth
-        logger.info("Creating Decky-Recording-Sink")
+        logger.info(f"Creating {self._deckySinkModuleName}")
 
-        create_null_sink_cli = "pactl load-module module-null-sink sink_name=Decky-Recording-Sink"
+        self._deckySinkModule = get_cmd_output(f"pactl load-module module-null-sink sink_name={self._deckySinkModuleName}")
 
-        logger.info(f"Command: {create_null_sink_cli}")
-        self._deckySinkModule = subprocess.getoutput(create_null_sink_cli).strip()
+        self._echoCancelledModule = get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master={mic_input} sink_master={audio_device_output} source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc'")
 
-        create_echo_sink_cli = f"pactl load-module module-echo-cancel use_master_format=1 source_master={mic_input} sink_master={audio_device_output} source_name=Echo-Cancelled-Mic sink_name=Echo-Cancelled-Speaker aec_method='webrtc'"
-
-        logger.info(f"Command: {create_echo_sink_cli}")
-        self._echoCancelledModule = subprocess.getoutput(create_echo_sink_cli).strip()
-
-        create_echo_audio_loopback_cli = f"pactl load-module module-loopback source=Echo-Cancelled-Speaker.monitor sink=Decky-Recording-Sink"
-
-        logger.info(f"Command: {create_echo_audio_loopback_cli}")
-        self._echoCancelledAudioModule = subprocess.getoutput(create_echo_audio_loopback_cli).strip()
+        self._echoCancelledAudioModule = get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledAudioName}.monitor sink={self._deckySinkModuleName}")
 
         if await Plugin.is_mic_enabled(self):
             await Plugin.attach_mic(self)
@@ -293,40 +291,31 @@ class Plugin:
         if await Plugin.is_mic_attached(self):
             await Plugin.detach_mic(self)
 
-        unload_audio_cli = f"pactl unload-module {self._echoCancelledAudioModule}"
+        get_cmd_output(f"pactl unload-module {self._echoCancelledAudioModule}")
+        self._echoCancelledAudioModule = "NA"
 
-        logger.info(f"Command: {unload_audio_cli}")
-        subprocess.getoutput(unload_audio_cli)
-
-        unload_decky_cli = f"pactl unload-module {self._deckySinkModule}"
-
-        logger.info(f"Command: {unload_decky_cli}")
-        subprocess.getoutput(unload_decky_cli)
+        get_cmd_output(f"pactl unload-module {self._deckySinkModule}")
+        self._deckySinkModule = "NA"
 
     async def is_mic_enabled(self):
         logger.info(f"Is mic enabled? {self._micEnabled}")
         return self._micEnabled
 
     async def is_mic_attached(self):
-        is_attached = self._echoCancelledMicModule != "NA"
+        is_attached = self._echoCancelledMicLoopbackModule != "NA"
         logger.info(f"Is mic attached? {is_attached}")
         return is_attached
 
     async def attach_mic(self):
-        logger.info(f"Attaching Microphone Echo-Cancelled-Mic")
+        logger.info(f"Attaching Microphone {self._echoCancelledMicName}")
 
-        mic_loopback_cli = "pactl load-module module-loopback source=Echo-Cancelled-Mic sink=Decky-Recording-Sink"
-
-        logger.info(f"Command: {mic_loopback_cli}")
-        self._echoCancelledMicLoopbackModule = subprocess.getoutput(mic_loopback_cli).strip()
+        self._echoCancelledMicLoopbackModule = get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName} sink={self._deckySinkModuleName}")
 
     async def detach_mic(self):
-        logger.info(f"Detaching Microphone Echo-Cancelled-Mic")
+        logger.info(f"Detaching Microphone {self._echoCancelledMicName}")
 
-        mic_loopback_cli = "pactl unload-module {self._echoCancelledMicLoopbackModule}"
-
-        logger.info(f"Command: {mic_loopback_cli}")
-        subprocess.run(mic_loopback_cli, shell=True)
+        get_cmd_output(f"pactl unload-module {self._echoCancelledMicLoopbackModule}")
+        self._echoCancelledMicLoopbackModule = "NA"
 
     async def enable_microphone(self):
         logger.info("Enable microphone")
