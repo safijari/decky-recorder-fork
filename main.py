@@ -113,12 +113,16 @@ class Plugin:
                 if not in_gm and is_cap:
                     logger.warn("Left gamemode but recording was still running, killing capture")
                     await Plugin.stop_capturing(self)
+                # This can be buggy due to race condition between disabling rolling and the watchdog seeing that rolling is disabled
                 elif in_gm and not is_cap and self._rolling:
-                    logger.warn("In gamemode but recording was not working, starting capture")
-                    await Plugin.stop_capturing(self)
-                    await Plugin.start_capturing(self)
+                    # Add another 2 second wait to ensure that the state is still consistent...
+                    await asyncio.sleep(2)
+                    if self._rolling:
+                        logger.warn("In gamemode but recording was not working, starting capture")
+                        await Plugin.stop_capturing(self)
+                        await Plugin.start_capturing(self)
             except Exception:
-                logger.exception("watchdog")
+                logger.exception(f"watchdog exception! {Exception.message}")
             await asyncio.sleep(5)
 
     # Starts the capturing process
@@ -266,9 +270,10 @@ class Plugin:
 
     async def disable_rolling(self):
         logger.info("Disable rolling was called begin")
+        # turn rolling off ASAP to avoid race condition with watchdog
+        self._rolling = False
         if await Plugin.is_capturing(self):
             await Plugin.stop_capturing(self)
-        self._rolling = False
         await Plugin.saveConfig(self)
         try:
             for path in list(Path(self._rollingRecordingFolder).glob(f"{self._rollingRecordingPrefix}*")):
@@ -290,6 +295,7 @@ class Plugin:
 
     async def attach_mic(self):
         mic_input = subprocess.getoutput("pactl get-default-source").strip()
+        print(f"Attaching Microphone {mic_input}")
 
         self._echoCancelledMicModule = subprocess.getoutput(f"pactl load-module module-echo-cancel use_master_format=1 source_master={mic_input} source_name=Echo-Cancelled-Mic aec_method='webrtc' aec_args='\"beamforming=1 mic_geometry=-0.06,0,0,0.06,0,0\"'").strip()
         self._echoCancelledMicLoopbackModule = subprocess.getoutput(f"pactl load-module module-loopback source=Echo-Cancelled-Mic sink=Decky-Recording-Sink").strip()
