@@ -197,8 +197,8 @@ class Plugin:
                 subprocess.run("pactl load-module module-null-sink sink_name=Decky-Recording-Sink", shell=True)
                 subprocess.run(f"pactl load-module module-loopback source={monitor} sink=Decky-Recording-Sink", shell=True)
 
-                if is_mic_enabled(self):
-                    attach_mic(self)
+                if Plugin.is_mic_enabled(self):
+                    Plugin.attach_mic(self)
 
             cmd = (
                 cmd
@@ -296,8 +296,8 @@ class Plugin:
         logger.info("Enable microphone")
         # if capturing, stop that capture, then re-enable with rolling
         if await Plugin.is_capturing(self):
-            if not await is_mic_attached(self):
-                await attach_mic(self)
+            if not await Plugin.is_mic_attached(self):
+                await Plugin.attach_mic(self)
         self._micEnabled = True
         await Plugin.saveConfig(self)
         logger.info("Enable mic was called end")
@@ -307,8 +307,8 @@ class Plugin:
         logger.info("Disable microphone")
         # if capturing, stop that capture, then re-enable with rolling
         if await Plugin.is_capturing(self):
-            if await is_mic_attached(self):
-                await detach_mic(self)
+            if await Plugin.is_mic_attached(self):
+                await Plugin.detach_mic(self)
         self._micEnabled = False   
         await Plugin.saveConfig(self)
         logger.info("Disable mic was called end")
