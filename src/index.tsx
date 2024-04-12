@@ -148,6 +148,9 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 		const getIsRollingResponse = await serverAPI.callPluginMethod('is_rolling', {});
 		setRolling(getIsRollingResponse.result as boolean);
 
+		const getMicEnabled = await serverAPI.callPluginMethod('is_mic_enabled', {});
+		setMicrophone(getMicEnabled.result as boolean);
+
 		// const getModeResponse = await serverAPI.callPluginMethod('get_current_mode', {});
 		// setMode(getModeResponse.result as string);
 
