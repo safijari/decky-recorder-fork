@@ -195,9 +195,10 @@ class Plugin:
             deckyRecordingSinkExists = subprocess.run(f"pactl list sinks | grep '{self._deckySinkModuleName}'", shell=True).returncode == 0
 
             if deckyRecordingSinkExists:
-                logger.info(f"{self._deckySinkModuleName} already exists, reusing")
-            else:
-                await Plugin.create_decky_pa_sink(self)
+                logger.info(f"{self._deckySinkModuleName} already exists, rebuilding sink for safety")
+                await Plugin.cleanup_decky_pa_sink(self)
+
+            await Plugin.create_decky_pa_sink(self)
 
             cmd = (
                 cmd
