@@ -283,7 +283,7 @@ class Plugin:
 
         get_cmd_output(f"pactl load-module module-null-sink sink_name={self._deckySinkModuleName}")
 
-        self._standardAudioModule = get_cmd_output(f"pactl load-module module-loopback source={audio_device_output}.monitor sink={self._deckySinkModuleName}")
+        get_cmd_output(f"pactl load-module module-loopback source={audio_device_output}.monitor sink={self._deckySinkModuleName}")
 
         if await Plugin.is_mic_enabled(self):
             await Plugin.attach_mic(self)
