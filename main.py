@@ -370,9 +370,10 @@ class Plugin:
     async def set_mic_source(self, new_mic_source: str):
         logger.info(f"Setting new mic source: {new_mic_source}")
         self._micSource = new_mic_source
-        if await Plugin.is_mic_enabled(self):
-            await Plugin.detach_mic(self)
-            await Plugin.attach_mic(self)
+        if await Plugin.is_capturing(self):
+            if await Plugin.is_mic_enabled(self):
+                await Plugin.detach_mic(self)
+                await Plugin.attach_mic(self)
 
     # Sets the current mode, supported modes are: localFile
     async def set_current_mode(self, mode: str):
