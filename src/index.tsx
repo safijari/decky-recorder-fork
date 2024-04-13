@@ -76,6 +76,10 @@ class DeckyRecorderLogic
 		await this.serverAPI.callPluginMethod('update_mic_gain', {new_gain: newMicGain});
 	}
 
+	updateNoiseReductionPercent = async (newNoiseReductionPercent: number) => {
+		await this.serverAPI.callPluginMethod('update_noise_reduction_percent', {new_percent: newNoiseReductionPercent});
+	}
+
 	getParsedMicSources = async () => {
 		return JSON.parse((await this.serverAPI.callPluginMethod('get_mic_sources', {})).result as string);
 	}
@@ -135,10 +139,11 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 	const [buttonsEnabled, setButtonsEnabled] = useState<boolean>(true);
 
 	const [micGain, setMicGain] = useState<number>(13);
+	const [noiseReductionPercent, setNoiseReductionPercent] = useState<number>(50);
 
-	const [micSource, setMicSource] = useState<DropdownOption>({data: "@DEFAULT_SOURCE@", label: "Default Mic"});
+	const [micSource, setMicSource] = useState<DropdownOption>({data: "NA", label: "Default Mic"});
 
-	const [micSourcesList, setMicSourcesList] = useState<DropdownOption[]>([{data: "@DEFAULT_SOURCE@", label: "Default Mic"}]);
+	const [micSourcesList, setMicSourcesList] = useState<DropdownOption[]>([{data: "NA", label: "Default Mic"}]);
 
 	// const audioBitrateOption128 = { data: "128", label: "128 Kbps" } as SingleDropdownOption
 	// const audioBitrateOption192 = { data: "192", label: "192 Kbps" } as SingleDropdownOption
@@ -168,6 +173,9 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 
 		const getMicGain = await serverAPI.callPluginMethod('get_mic_gain', {});
 		setMicGain(getMicGain.result as number);
+
+		const getNoiseReductionPercent = await serverAPI.callPluginMethod('get_noise_reduction_percent', {});
+		setNoiseReductionPercent(getNoiseReductionPercent.result as number);
 
 		let getMicSource = await serverAPI.callPluginMethod('get_mic_source', {});
 		if (getMicSource.result as string == "NA") {
@@ -279,6 +287,10 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 		logic.updateMicGain(micGain)
 	}
 
+	const changenoiseReductionPercent = async () => {
+		logic.updateNoiseReductionPercent(noiseReductionPercent)
+	}
+
 	const getMicSources = async () => {
 		const parsedMicSources = await logic.getParsedMicSources()
 		setMicSourcesList(parsedMicSources)
@@ -295,8 +307,6 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 			return "Stop Recording";
 		}
 	}
-
-
 
 	useEffect(() => {
 		initState();
@@ -331,6 +341,17 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 							showValue={true}
 							editableValue={true}
 							onChange={(e) => { setMicGain(e); changeMicGain(); }}
+						/>
+						<SliderField
+							label="Noise Reduction (default 50%)"
+							value={noiseReductionPercent}
+							resetValue={50}
+							min={0}
+							max={100}
+							step={2}
+							showValue={true}
+							editableValue={true}
+							onChange={(e) => { setNoiseReductionPercent(e); changenoiseReductionPercent(); }}
 						/>
 						<PanelSectionRow>
 							<Dropdown
