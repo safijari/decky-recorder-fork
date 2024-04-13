@@ -173,6 +173,8 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 		if (getMicSource.result as string == "NA") {
 			getMicSource = await serverAPI.callPluginMethod('get_default_mic', {});
 			setMicSource({data: getMicSource.result as string, label: "Default Mic"})
+		} else if ((getMicSource.result as string).includes("alsa_input")){
+			setMicSource({data: getMicSource.result as string, label: "Default Mic"})
 		} else {
 			setMicSource({data: getMicSource.result as string, label: getMicSource.result})
 		}
