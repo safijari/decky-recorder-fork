@@ -86,7 +86,7 @@ class Plugin:
     _rolling: bool = False
     _micEnabled: bool = False
     _micGain: float = 13.0
-    _micSource: float = "@DEFAULT_SOURCE@"
+    _micSource: float = "NA"
     _deckySinkModuleName: str = "Decky-Recording-Sink"
     _echoCancelledAudioName: str = "Echo-Cancelled-Audio"
     _echoCancelledMicName: str = "Echo-Cancelled-Mic"
@@ -292,6 +292,9 @@ class Plugin:
         unload_pa_modules("Echo-Cancelled")
         unload_pa_modules(f"{self._deckySinkModuleName}")
 
+    async def get_default_mic(self):
+        return get_cmd_output("pactl get-default-source")
+
     async def is_mic_enabled(self):
         logger.info(f"Is mic enabled? {self._micEnabled}")
         return self._micEnabled
@@ -305,7 +308,11 @@ class Plugin:
         logger.info(f"Attaching Microphone {self._echoCancelledMicName}")
 
         # attached echo cancelled mic
-        get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master=@DEFAULT_SOURCE@ sink_master={self._micSource} source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_gain_control=0 digital_gain_control=1'")
+        if self._micSource == "NA":
+            self._micSource = await Plugin.get_default_mic(self)
+
+        get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master=@DEFAULT_SOURCE@ sink_master={self._micSource} source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_g
+ain_control=0 digital_gain_control=1'")
 
         get_cmd_output(f"pactl set-source-volume Echo-Cancelled-Mic {self._micGain}db")
         get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName} sink={self._deckySinkModuleName}")
@@ -345,10 +352,13 @@ class Plugin:
                 get_cmd_output(f"pactl set-source-volume Echo-Cancelled-Mic {self._micGain}db")
         await Plugin.saveConfig(self)
 
+    async def get_mic_source(self):
+        return self._micSource
+
     async def get_mic_sources(self):
         logger.info(f"Getting available mic sources")
         raw_sources = get_cmd_output("pactl list short sources | awk '{print $2}'").split("\n")
-        sources_json = [{"data": "@DEFAULT_SOURCE@", "label": "@DEFAULT_SOURCE@"}]
+        sources_json = [{"data": f"{await Plugin.get_default_mic(self)}", "label": "Default Mic"}]
         for source in raw_sources:
             # Stop recursive pointing
             if "Echo" not in source and "monitor" not in source and "Decky" not in source:
