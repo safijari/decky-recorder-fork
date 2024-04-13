@@ -358,10 +358,11 @@ ain_control=0 digital_gain_control=1'")
     async def get_mic_sources(self):
         logger.info(f"Getting available mic sources")
         raw_sources = get_cmd_output("pactl list short sources | awk '{print $2}'").split("\n")
-        sources_json = [{"data": f"{await Plugin.get_default_mic(self)}", "label": "Default Mic"}]
+        default_source = await Plugin.get_default_mic(self)
+        sources_json = [{"data": f"{default_source}", "label": "Default Mic"}]
         for source in raw_sources:
             # Stop recursive pointing
-            if "Echo" not in source and "monitor" not in source and "Decky" not in source:
+            if "Echo" not in source and "monitor" not in source and "Decky" not in source and source != default_source:
                 sources_json.append({"data": source, "label": source})
 
         logger.info(json.dumps(sources_json))
