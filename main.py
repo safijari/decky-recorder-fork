@@ -69,7 +69,7 @@ class Plugin:
     _recording_process = None
     _filepath: str = None
     _mode: str = "localFile"
-    _audioBitrate: int = 128
+    _audioBitrate: int = 320000
     _localFilePath: str = decky_plugin.HOME + "/Videos"
     _rollingRecordingFolder: str = "/dev/shm"
     _rollingRecordingPrefix: str = "Decky-Recorder-Rolling"
@@ -178,7 +178,7 @@ class Plugin:
                     break
             cmd = (
                 cmd
-                + f' pulsesrc device="Recording_{monitor}" ! audio/x-raw, channels=2 ! audioconvert ! lamemp3enc target=bitrate bitrate={self._audioBitrate} cbr=true ! sink.audio_0'
+                + f' pulsesrc device="Recording_{monitor}" ! audio/x-raw, channels=2 ! audioconvert ! faac bitrate={self._audioBitrate} rate-control=2 ! sink.audio_0'
             )
 
             # Starts the capture process
@@ -359,7 +359,7 @@ class Plugin:
 
             dateTime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             ffmpeg = subprocess.Popen(
-                f'ffmpeg -hwaccel vaapi -hwaccel_output_format vaapi -vaapi_device /dev/dri/renderD128 -f concat -safe 0 -i {self._rollingRecordingFolder}/files -c copy "{self._localFilePath}/{app_name}-{clip_duration}s-{dateTime}.{self._fileformat}"',
+                f'ffmpeg -hwaccel vaapi -hwaccel_output_format vaapi -vaapi_device /dev/dri/renderD128 -f concat -safe 0 -i {self._rollingRecordingFolder}/files -c:v copy -c:a aac -b:a 192k -af aresample=async=1000 "{self._localFilePath}/{app_name}-{clip_duration}s-{dateTime}.{self._fileformat}"',
                 shell=True,
                 stdout=std_out_file,
                 stderr=std_err_file,
