@@ -311,8 +311,7 @@ class Plugin:
         if self._micSource == "NA":
             self._micSource = await Plugin.get_default_mic(self)
 
-        get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master=@DEFAULT_SOURCE@ sink_master={self._micSource} source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_g
-ain_control=0 digital_gain_control=1'")
+        get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master=@DEFAULT_SOURCE@ sink_master={self._micSource} source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_gain_control=0 digital_gain_control=1'")
 
         get_cmd_output(f"pactl set-source-volume Echo-Cancelled-Mic {self._micGain}db")
         get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName} sink={self._deckySinkModuleName}")
