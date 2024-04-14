@@ -9,7 +9,8 @@ import {
 	DropdownOption,
 	SingleDropdownOption,
 	Router,
-	ToggleField
+	ToggleField,
+	SliderField
 } from "decky-frontend-lib";
 
 import {
@@ -63,6 +64,26 @@ class DeckyRecorderLogic
 		}
 	}
 
+	toggleMicrophone = async (microphoneEnabled: boolean) => {
+		if (!microphoneEnabled) {
+			await this.serverAPI.callPluginMethod('enable_microphone', {});
+		} else {
+			await this.serverAPI.callPluginMethod('disable_microphone', {});
+		}
+	}
+
+	updateMicGain = async (newMicGain: number) => {
+		await this.serverAPI.callPluginMethod('update_mic_gain', {new_gain: newMicGain});
+	}
+
+	updateNoiseReductionPercent = async (newNoiseReductionPercent: number) => {
+		await this.serverAPI.callPluginMethod('update_noise_reduction_percent', {new_percent: newNoiseReductionPercent});
+	}
+
+	getParsedMicSources = async () => {
+		return JSON.parse((await this.serverAPI.callPluginMethod('get_mic_sources', {})).result as string);
+	}
+
 	handleButtonInput = async (val: any[]) => {
 		/*
 		R2 0
@@ -113,8 +134,17 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 	// const [mode, setMode] = useState<string>("localFile");
 
 	const [isRolling, setRolling] = useState<boolean>(false);
+	const [microphoneEnabled, setMicrophone] = useState<boolean>(false);
 
 	const [buttonsEnabled, setButtonsEnabled] = useState<boolean>(true);
+
+	const [micGain, setMicGain] = useState<number>(10);
+	const [isEnhancedNoiseCancellation, setEnhancedNoiseCancellation] = useState<boolean>(false);
+	const [noiseReductionPercent, setNoiseReductionPercent] = useState<number>(50);
+
+	const [micSource, setMicSource] = useState<DropdownOption>({data: "NA", label: "Default Mic"});
+
+	const [micSourcesList, setMicSourcesList] = useState<DropdownOption[]>([{data: "NA", label: "Default Mic"}]);
 
 	// const audioBitrateOption128 = { data: "128", label: "128 Kbps" } as SingleDropdownOption
 	// const audioBitrateOption192 = { data: "192", label: "192 Kbps" } as SingleDropdownOption
@@ -138,6 +168,28 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 
 		const getIsRollingResponse = await serverAPI.callPluginMethod('is_rolling', {});
 		setRolling(getIsRollingResponse.result as boolean);
+
+		const getMicEnabled = await serverAPI.callPluginMethod('is_mic_enabled', {});
+		setMicrophone(getMicEnabled.result as boolean);
+
+		const getMicGain = await serverAPI.callPluginMethod('get_mic_gain', {});
+		setMicGain(getMicGain.result as number);
+
+		const getEnhancedNoiseCancellation = await serverAPI.callPluginMethod('enhanced_noise_binary_exists', {});
+		setEnhancedNoiseCancellation(getEnhancedNoiseCancellation.result as boolean);
+
+		const getNoiseReductionPercent = await serverAPI.callPluginMethod('get_noise_reduction_percent', {});
+		setNoiseReductionPercent(getNoiseReductionPercent.result as number);
+
+		let getMicSource = await serverAPI.callPluginMethod('get_mic_source', {});
+		if (getMicSource.result as string == "NA") {
+			getMicSource = await serverAPI.callPluginMethod('get_default_mic', {});
+			setMicSource({data: getMicSource.result as string, label: "Default Mic"})
+		} else if ((getMicSource.result as string).includes("alsa_input")){
+			setMicSource({data: getMicSource.result as string, label: "Default Mic"})
+		} else {
+			setMicSource({data: getMicSource.result as string, label: getMicSource.result})
+		}
 
 		// const getModeResponse = await serverAPI.callPluginMethod('get_current_mode', {});
 		// setMode(getModeResponse.result as string);
@@ -231,6 +283,23 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 		setRolling(!isRolling);
 	}
 
+	const microphoneToggled = async () => {
+		logic.toggleMicrophone(microphoneEnabled);
+	}
+
+	const changeMicGain = async () => {
+		logic.updateMicGain(micGain)
+	}
+
+	const changeNoiseReductionPercent = async () => {
+		logic.updateNoiseReductionPercent(noiseReductionPercent)
+	}
+
+	const getMicSources = async () => {
+		const parsedMicSources = await logic.getParsedMicSources()
+		setMicSourcesList(parsedMicSources)
+	}
+
 	const getFilePickerText = (): string => {
 		return "Recordings will be saved to " + localFilePath;
 	}
@@ -242,8 +311,6 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 			return "Stop Recording";
 		}
 	}
-
-
 
 	useEffect(() => {
 		initState();
@@ -259,6 +326,59 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 					onChange={(e) => { setRolling(e); rollingToggled(); }}
 				/>
 				<div>Steam + Start saves a 30 second clip in replay mode. If replay mode is off, this shortcut will enable it.</div>
+				<ToggleField
+					label="Enable Microphone Recording"
+					checked={microphoneEnabled}
+					onChange={(e) => { setMicrophone(e); microphoneToggled(); }}
+				/>
+				<div>Enable recording of echo-cancelled microphone</div>
+				{
+					(microphoneEnabled) ?
+					<div>
+						<SliderField
+							label="Microphone Gain (default 10db)"
+							value={micGain}
+							resetValue={10}
+							min={0}
+							max={20}
+							step={1}
+							showValue={true}
+							editableValue={true}
+							onChange={(e) => { setMicGain(e); changeMicGain(); }}
+						/>
+						{
+							(isEnhancedNoiseCancellation) ?
+							<SliderField
+								label="Noise Reduction (default 50%)"
+								value={noiseReductionPercent}
+								resetValue={50}
+								min={0}
+								max={100}
+								step={2}
+								showValue={true}
+								editableValue={true}
+								onChange={(e) => { setNoiseReductionPercent(e); changeNoiseReductionPercent(); }}
+							/> : null
+						}
+						<PanelSectionRow>
+							<Dropdown
+								menuLabel="Select the Microphone Source"
+								strDefaultLabel={micSource.label as string}
+								rgOptions={micSourcesList}
+								selectedOption={micSource}
+								onMenuWillOpen={(showMenu: () => void) => {
+									getMicSources()
+									showMenu()
+								}}
+								onChange={(newSource) => {
+									setMicSource(newSource.data);
+									serverAPI.callPluginMethod('set_mic_source', { new_mic_source: newSource.data });
+								}}
+							/>
+						</PanelSectionRow>
+						<div>Select the Microphone Source</div>
+					</div> : null
+				}
 				{(!isRolling) ?
 					<div>
 

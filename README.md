@@ -2,6 +2,27 @@
 
 Original Repo: https://github.com/marissa999/decky-recorder?tab=readme-ov-file
 
+### Using enhanced mic noise cancellation
+
+Optionally, you can download an enhanced noise cancellation binary for better noise cancellation from <https://github.com/werman/noise-suppression-for-voice>. If you run the script below, the binary will be extracted to `/home/deck/homebrew/data/decky-recorder/librnnoise_ladspa.so`. The recorder backend will automatically check for this and will use this noise cancellation binary instead of the default cancellation if it exists.
+
+```bash
+# Download gpl-3 binary for superior denoising (cannot include in this repo as gpl)
+
+# Define the URLs and file paths
+denoise_version="1.03"
+denoise_zip_url="https://github.com/werman/noise-suppression-for-voice/releases/download/v${denoise_version}/linux-rnnoise.zip"
+denoise_zip_file_path="/home/deck/homebrew/data/decky-recorder/linux-rnnoise.zip"
+denoise_extracted_file_path="/home/deck/homebrew/data/decky-recorder/librnnoise_ladspa.so"
+
+wget "${denoise_zip_url}" -O "${denoise_zip_file_path}"
+unzip -j "${denoise_zip_file_path}" 'linux-rnnoise/ladspa/librnnoise_ladspa.so' -d /tmp
+mv /tmp/librnnoise_ladspa.so "${denoise_extracted_file_path}"
+rm /tmp/librnnoise_ladspa.so "${denoise_zip_file_path}"
+```
+
+Once you do this, reopen decky recorder, restart the microphone toggle, and you should see options to change the noise reduction percentage.
+
 ### Building
 If you want to build this plugin in theory you only need to run `make init` first, fill out details in the `.env` file, and then run `make it`. You will need the following:
 - node 18 (I recommend using nvm)

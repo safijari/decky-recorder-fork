@@ -9,10 +9,11 @@ from pathlib import Path
 from settings import SettingsManager
 import decky_plugin
 import logging
+import shutil
+import json
 
 # Get environment variable
 settingsDir = os.environ["DECKY_PLUGIN_SETTINGS_DIR"]
-
 
 import asyncio
 
@@ -64,6 +65,14 @@ def in_gamemode():
             pass
     return False
 
+def get_cmd_output(cmd):
+    logger.info(f"Command: {cmd}")
+    return subprocess.getoutput(cmd).strip()
+
+def unload_pa_modules(search_string):
+    module_list = get_cmd_output(f"pactl list short modules | grep '{search_string}' | awk '{{print $1}}'").split("\n")
+    for module_id in module_list:
+        get_cmd_output(f"pactl unload-module {module_id}")
 
 class Plugin:
     _recording_process = None
@@ -75,6 +84,14 @@ class Plugin:
     _rollingRecordingPrefix: str = "Decky-Recorder-Rolling"
     _fileformat: str = "mkv"
     _rolling: bool = False
+    _micEnabled: bool = False
+    _micGain: float = 13.0
+    _noiseReductionPercent: int = 50
+    _micSource: float = "NA"
+    _deckySinkModuleName: str = "Decky-Recording-Sink"
+    _echoCancelledAudioName: str = "Echo-Cancelled-Audio"
+    _echoCancelledMicName: str = "Echo-Cancelled-Mic"
+    _optional_denoise_binary_path="/home/deck/homebrew/data/decky-recorder/librnnoise_ladspa.so"
     _last_clip_time: float = time.time()
     _watchdog_task = None
     _muxer_map = {"mp4": "matroskamux", "mkv": "matroskamux", "mov": "qtmux"}
@@ -93,20 +110,34 @@ class Plugin:
         while True:
             try:
                 in_gm = in_gamemode()
+                if in_gm:
+                    try:
+                        shutil.rmtree((Path(decky_plugin.HOME) / ".local/share/kscreen"))
+                    except OSError as e:
+                        pass
+                    except Exception:
+                        logger.exception("path rm")
                 is_cap = await Plugin.is_capturing(self, verbose=False)
+                if not in_gm and is_cap:
+                    await Plugin.stop_capturing(self)
+                    await Plugin.clear_rogue_gst_processes(self)
                 std_out_lines = open(std_out_file_path, "r").readlines()
                 if std_out_lines:
                     is_cap = is_cap and ("Freeing" not in std_out_lines[-1])
                 if not in_gm and is_cap:
                     logger.warn("Left gamemode but recording was still running, killing capture")
                     await Plugin.stop_capturing(self)
+                # This can be buggy due to race condition between disabling rolling and the watchdog seeing that rolling is disabled
                 elif in_gm and not is_cap and self._rolling:
-                    logger.warn("In gamemode but recording was not working, starting capture")
-                    await Plugin.stop_capturing(self)
-                    await Plugin.start_capturing(self)
+                    # Add another 2 second wait to ensure that the state is still consistent...
+                    await asyncio.sleep(2)
+                    if self._rolling:
+                        logger.warn("In gamemode but recording was not working, starting capture")
+                        await Plugin.stop_capturing(self)
+                        await Plugin.start_capturing(self)
             except Exception:
-                logger.exception("watchdog")
-            await asyncio.sleep(1.0)
+                logger.exception(f"watchdog exception! {Exception.message}")
+            await asyncio.sleep(5)
 
     # Starts the capturing process
     async def start_capturing(self, app_name: str = ""):
@@ -165,20 +196,17 @@ class Plugin:
                 logger.info(f"Mode {self._mode} does not exist")
                 return
 
-            logger.info("Making audio pipeline")
-            # Creates audio pipeline
-            audio_device_output = subprocess.getoutput("pactl get-default-sink")
-            # expected output: alsa_output.pci-0000_04_00.5-platform-acp5x_mach.0.HiFi__hw_acp5x_1__sink when using internal speaker
-            # bluez_output.20_74_CF_F1_C0_1E.1 when using bluetooth
-            logger.info(f"Audio device output {audio_device_output}")
-            monitor = ".monitor"
-            for line in audio_device_output.split("\n"):
-                if "alsa_output" in line or "bluez_" in line:
-                    monitor = line + ".monitor"
-                    break
+            deckyRecordingSinkExists = subprocess.run(f"pactl list sinks | grep '{self._deckySinkModuleName}'", shell=True).returncode == 0
+
+            if deckyRecordingSinkExists:
+                logger.info(f"{self._deckySinkModuleName} already exists, rebuilding sink for safety")
+                await Plugin.cleanup_decky_pa_sink(self)
+
+            await Plugin.create_decky_pa_sink(self)
+
             cmd = (
                 cmd
-                + f' pulsesrc device="Recording_{monitor}" ! audio/x-raw, channels=2 ! audioconvert ! lamemp3enc target=bitrate bitrate={self._audioBitrate} cbr=true ! sink.audio_0'
+                + f' pulsesrc device="{self._deckySinkModuleName}.monitor" ! audio/x-raw, channels=2 ! audioconvert ! lamemp3enc target=bitrate bitrate={self._audioBitrate} cbr=true ! sink.audio_0'
             )
 
             # Starts the capture process
@@ -208,6 +236,7 @@ class Plugin:
             await Plugin.clear_rogue_gst_processes(self)
         logger.info("Waiting finished. Recording stopped!")
 
+        await Plugin.cleanup_decky_pa_sink(self)
         return
 
     # Returns true if the plugin is currently capturing
@@ -233,9 +262,10 @@ class Plugin:
 
     async def disable_rolling(self):
         logger.info("Disable rolling was called begin")
+        # turn rolling off ASAP to avoid race condition with watchdog
+        self._rolling = False
         if await Plugin.is_capturing(self):
             await Plugin.stop_capturing(self)
-        self._rolling = False
         await Plugin.saveConfig(self)
         try:
             for path in list(Path(self._rollingRecordingFolder).glob(f"{self._rollingRecordingPrefix}*")):
@@ -244,6 +274,135 @@ class Plugin:
         except Exception:
             logger.exception("Failed to delete rolling recording buffer files")
         logger.info("Disable rolling was called end")
+
+    async def create_decky_pa_sink(self):
+        logger.info("Making audio pipeline")
+        # Creates audio pipeline
+        audio_device_output = get_cmd_output("pactl get-default-sink")
+        # expected output: alsa_output.pci-0000_04_00.5-platform-acp5x_mach.0.HiFi__hw_acp5x_1__sink when using internal speaker
+        # bluez_output.20_74_CF_F1_C0_1E.1 when using bluetooth
+        logger.info(f"Creating {self._deckySinkModuleName}")
+
+        get_cmd_output(f"pactl load-module module-null-sink sink_name={self._deckySinkModuleName}")
+
+        get_cmd_output(f"pactl load-module module-loopback source={audio_device_output}.monitor sink={self._deckySinkModuleName}")
+
+        if await Plugin.is_mic_enabled(self):
+            await Plugin.attach_mic(self)
+
+    async def cleanup_decky_pa_sink(self):
+        unload_pa_modules("Echo-Cancelled")
+        unload_pa_modules(f"{self._deckySinkModuleName}")
+
+    async def get_default_mic(self):
+        return get_cmd_output("pactl get-default-source")
+
+    async def is_mic_enabled(self):
+        logger.info(f"Is mic enabled? {self._micEnabled}")
+        return self._micEnabled
+
+    async def is_mic_attached(self):
+        is_attached = subprocess.run("pactl list modules | grep 'Echo-Cancelled'",shell=True).returncode == 0
+        logger.info(f"Is mic attached? {is_attached}")
+        return is_attached
+
+    async def attach_mic(self):
+        logger.info(f"Attaching Microphone {self._echoCancelledMicName}")
+
+        if self._micSource == "NA":
+            self._micSource = await Plugin.get_default_mic(self)
+
+        # check if the user has downloaded the optional noise cancellation binary
+        if await Plugin.enhanced_noise_binary_exists(self):
+            # attached echo cancelled mic
+
+            get_cmd_output(f"pactl load-module module-null-sink sink_name={self._echoCancelledMicName} rate=48000")
+
+            get_cmd_output(f"pactl load-module module-ladspa-sink sink_name={self._echoCancelledMicName}_raw_in sink_master={self._echoCancelledMicName} label=noise_suppressor_mono plugin={self._optional_denoise_binary_path} control={self._noiseReductionPercent},20,0,0,0")
+
+            # This module cannot use @DEFAULT_SOURCE@, don't know why
+            get_cmd_output(f"pactl load-module module-loopback source={self._micSource} sink={self._echoCancelledMicName}_raw_in channels=1 source_dont_move=true sink_dont_move=true")
+
+            get_cmd_output(f"pactl set-source-volume {self._echoCancelledMicName}.monitor {self._micGain}db")
+
+            get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName}.monitor sink={self._deckySinkModuleName}")
+        else:
+            get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master={self._micSource} sink_master=@DEFAULT_SINK@ source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_gain_control=0 digital_gain_control=1'")
+            get_cmd_output(f"pactl set-source-volume Echo-Cancelled-Mic {self._micGain}db")
+            get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName} sink={self._deckySinkModuleName}")
+            get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledAudioName}.monitor sink={self._deckySinkModuleName}")
+
+    async def detach_mic(self):
+        logger.info(f"Detaching Microphone {self._echoCancelledMicName}")
+        unload_pa_modules("Echo-Cancelled")
+
+    async def enable_microphone(self):
+        logger.info("Enable microphone")
+        if await Plugin.is_capturing(self):
+            if not await Plugin.is_mic_attached(self):
+                await Plugin.attach_mic(self)
+        self._micEnabled = True
+        await Plugin.saveConfig(self)
+        logger.info("Enable mic was called end")
+
+    async def disable_microphone(self):
+        logger.info("Disable microphone")
+        # if capturing, stop that capture, then re-enable with rolling
+        if await Plugin.is_capturing(self):
+            if await Plugin.is_mic_attached(self):
+                await Plugin.detach_mic(self)
+        self._micEnabled = False   
+        await Plugin.saveConfig(self)
+        logger.info("Disable mic was called end")
+    
+    async def get_mic_gain(self):
+        return self._micGain
+
+    async def update_mic_gain(self, new_gain: float):
+        self._micGain = float(new_gain)
+        if await Plugin.is_capturing(self):
+            if await Plugin.is_mic_attached(self):
+                get_cmd_output(f"pactl set-source-volume Echo-Cancelled-Mic {self._micGain}db")
+        await Plugin.saveConfig(self)
+
+    async def enhanced_noise_binary_exists(self):
+        return os.path.exists(self._optional_denoise_binary_path)
+
+    async def get_noise_reduction_percent(self):
+        return self._noiseReductionPercent
+
+    async def update_noise_reduction_percent(self, new_percent: int):
+        logger.info(f"Updating noise reduction percent {new_percent}")
+        self._noiseReductionPercent = int(new_percent)
+        if await Plugin.is_capturing(self):
+            if await Plugin.is_mic_enabled(self):
+                await Plugin.detach_mic(self)
+                await Plugin.attach_mic(self)
+        await Plugin.saveConfig(self)
+
+    async def get_mic_source(self):
+        return self._micSource
+
+    async def get_mic_sources(self):
+        logger.info(f"Getting available mic sources")
+        raw_sources = get_cmd_output("pactl list short sources | awk '{print $2}'").split("\n")
+        default_source = await Plugin.get_default_mic(self)
+        sources_json = [{"data": f"{default_source}", "label": "Default Mic"}]
+        for source in raw_sources:
+            # Stop recursive pointing
+            if "Echo" not in source and "monitor" not in source and "Decky" not in source and source != default_source:
+                sources_json.append({"data": source, "label": source})
+
+        logger.info(json.dumps(sources_json))
+        return json.dumps(sources_json)
+
+    async def set_mic_source(self, new_mic_source: str):
+        logger.info(f"Setting new mic source: {new_mic_source}")
+        self._micSource = new_mic_source
+        if await Plugin.is_capturing(self):
+            if await Plugin.is_mic_enabled(self):
+                await Plugin.detach_mic(self)
+                await Plugin.attach_mic(self)
 
     # Sets the current mode, supported modes are: localFile
     async def set_current_mode(self, mode: str):
@@ -298,6 +457,9 @@ class Plugin:
         self._localFilePath = self._settings.getSetting("output_folder", "/home/deck/Videos")
         self._fileformat = self._settings.getSetting("format", "mkv")
         self._rolling = self._settings.getSetting("rolling", False)
+        self._micEnabled = self._settings.getSetting("mic_enabled", False)
+        self._micGain = self._settings.getSetting("mic_gain", 13.0)
+        self._noiseReductionPercent = self._settings.getSetting("noise_reduction_percent", 50.0)
 
         # Need this for initialization only honestly
         await Plugin.saveConfig(self)
@@ -308,6 +470,10 @@ class Plugin:
         self._settings.setSetting("format", self._fileformat)
         self._settings.setSetting("output_folder", self._localFilePath)
         self._settings.setSetting("rolling", self._rolling)
+        self._settings.setSetting("mic_enabled", self._micEnabled)
+        self._settings.setSetting("mic_gain", self._micGain)
+        self._settings.setSetting("noise_reduction_percent", self._noiseReductionPercent )
+
         return
 
     async def _main(self):
@@ -315,6 +481,9 @@ class Plugin:
         self._watchdog_task = loop.create_task(Plugin.watchdog(self))
         await Plugin.loadConfig(self)
         if await Plugin.is_rolling(self):
+            # Prevent bug where pulseaudio is not yet ready on fresh restart
+            logger.info("Waiting 5 seconds before starting Decky Recorder")
+            await asyncio.sleep(5)
             await Plugin.start_capturing(self)
         return
 
@@ -335,7 +504,7 @@ class Plugin:
 
         if not await Plugin.is_capturing(self):
             logger.warn("Tried to capture recording, but capture was not started!")
-            Plugin.start_capturing(self)
+            await Plugin.start_capturing(self)
             return -1
 
         if time.time() - self._last_clip_time < 2:
