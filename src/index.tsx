@@ -176,7 +176,7 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 		setMicGain(getMicGain.result as number);
 
 		const getEnhancedNoiseCancellation = await serverAPI.callPluginMethod('enhanced_noise_binary_exists', {});
-		setEnhancedNoiseCancellation((getEnhancedNoiseCancellation.result as string) == "true");
+		setEnhancedNoiseCancellation(getEnhancedNoiseCancellation.result as boolean);
 
 		const getNoiseReductionPercent = await serverAPI.callPluginMethod('get_noise_reduction_percent', {});
 		setNoiseReductionPercent(getNoiseReductionPercent.result as number);

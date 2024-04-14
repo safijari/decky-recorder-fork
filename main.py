@@ -313,7 +313,7 @@ class Plugin:
             self._micSource = await Plugin.get_default_mic(self)
 
         # check if the user has downloaded the optional noise cancellation binary
-        if os.path.exists(self._optional_denoise_binary_path):
+        if await Plugin.enhanced_noise_binary_exists(self):
             # attached echo cancelled mic
 
             get_cmd_output(f"pactl load-module module-null-sink sink_name={self._echoCancelledMicName} rate=48000")
@@ -366,7 +366,7 @@ class Plugin:
         await Plugin.saveConfig(self)
 
     async def enhanced_noise_binary_exists(self):
-        return "true" if os.path.exists(self._optional_denoise_binary_path) else "false"
+        return os.path.exists(self._optional_denoise_binary_path)
 
     async def get_noise_reduction_percent(self):
         return self._noiseReductionPercent
