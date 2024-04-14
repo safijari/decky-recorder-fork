@@ -92,7 +92,6 @@ class Plugin:
     _echoCancelledAudioName: str = "Echo-Cancelled-Audio"
     _echoCancelledMicName: str = "Echo-Cancelled-Mic"
     _optional_denoise_binary_path="/home/deck/homebrew/data/decky-recorder/librnnoise_ladspa.so"
-
     _last_clip_time: float = time.time()
     _watchdog_task = None
     _muxer_map = {"mp4": "matroskamux", "mkv": "matroskamux", "mov": "qtmux"}
