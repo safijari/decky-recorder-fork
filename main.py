@@ -320,7 +320,9 @@ class Plugin:
 
             get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName}.monitor sink={self._deckySinkModuleName}")
         else:
-            get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master={self._micSource} sink_master=@DEFAULT_SINK@ source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_gain_control=0 digital_gain_control=1'")
+            audio_device_output = get_cmd_output("pactl get-default-sink")
+
+            get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master={self._micSource} sink_master={audio_device_output} source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_gain_control=0 digital_gain_control=1'")
             get_cmd_output(f"pactl set-source-volume Echo-Cancelled-Mic {self._micGain}db")
             get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName} sink={self._deckySinkModuleName}")
             get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledAudioName}.monitor sink={self._deckySinkModuleName}")
