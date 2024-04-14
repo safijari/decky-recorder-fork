@@ -110,13 +110,6 @@ class Plugin:
         while True:
             try:
                 in_gm = in_gamemode()
-                if in_gm:
-                    try:
-                        shutil.rmtree((Path(decky_plugin.HOME) / ".local/share/kscreen"))
-                    except OSError as e:
-                        pass
-                    except Exception:
-                        logger.exception("path rm")
                 is_cap = await Plugin.is_capturing(self, verbose=False)
                 if not in_gm and is_cap:
                     await Plugin.stop_capturing(self)
@@ -137,7 +130,7 @@ class Plugin:
                         await Plugin.start_capturing(self)
             except Exception:
                 logger.exception(f"watchdog exception! {Exception.message}")
-            await asyncio.sleep(5)
+            await asyncio.sleep(2)
 
     # Starts the capturing process
     async def start_capturing(self, app_name: str = ""):
