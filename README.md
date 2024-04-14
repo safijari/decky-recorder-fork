@@ -18,7 +18,6 @@ denoise_extracted_file_path="/home/deck/homebrew/data/decky-recorder/librnnoise_
 wget "${denoise_zip_url}" -O "${denoise_zip_file_path}"
 unzip -j "${denoise_zip_file_path}" 'linux-rnnoise/ladspa/librnnoise_ladspa.so' -d /tmp
 mv /tmp/librnnoise_ladspa.so "${denoise_extracted_file_path}"
-rm /tmp/librnnoise_ladspa.so "${denoise_zip_file_path}"
 ```
 
 Once you do this, reopen decky recorder, restart the microphone toggle, and you should see options to change the noise reduction percentage.
