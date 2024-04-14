@@ -138,7 +138,8 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 
 	const [buttonsEnabled, setButtonsEnabled] = useState<boolean>(true);
 
-	const [micGain, setMicGain] = useState<number>(13);
+	const [micGain, setMicGain] = useState<number>(10);
+	const [isEnhancedNoiseCancellation, setEnhancedNoiseCancellation] = useState<boolean>(false);
 	const [noiseReductionPercent, setNoiseReductionPercent] = useState<number>(50);
 
 	const [micSource, setMicSource] = useState<DropdownOption>({data: "NA", label: "Default Mic"});
@@ -173,6 +174,9 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 
 		const getMicGain = await serverAPI.callPluginMethod('get_mic_gain', {});
 		setMicGain(getMicGain.result as number);
+
+		const getEnhancedNoiseCancellation = await serverAPI.callPluginMethod('enhanced_noise_binary_exists', {});
+		setEnhancedNoiseCancellation((getEnhancedNoiseCancellation.result as string) == "true");
 
 		const getNoiseReductionPercent = await serverAPI.callPluginMethod('get_noise_reduction_percent', {});
 		setNoiseReductionPercent(getNoiseReductionPercent.result as number);
@@ -287,7 +291,7 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 		logic.updateMicGain(micGain)
 	}
 
-	const changenoiseReductionPercent = async () => {
+	const changeNoiseReductionPercent = async () => {
 		logic.updateNoiseReductionPercent(noiseReductionPercent)
 	}
 
@@ -332,9 +336,9 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 					(microphoneEnabled) ?
 					<div>
 						<SliderField
-							label="Microphone Gain (default 13db)"
+							label="Microphone Gain (default 10db)"
 							value={micGain}
-							resetValue={13}
+							resetValue={10}
 							min={0}
 							max={20}
 							step={1}
@@ -342,17 +346,20 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 							editableValue={true}
 							onChange={(e) => { setMicGain(e); changeMicGain(); }}
 						/>
-						<SliderField
-							label="Noise Reduction (default 50%)"
-							value={noiseReductionPercent}
-							resetValue={50}
-							min={0}
-							max={100}
-							step={2}
-							showValue={true}
-							editableValue={true}
-							onChange={(e) => { setNoiseReductionPercent(e); changenoiseReductionPercent(); }}
-						/>
+						{
+							(isEnhancedNoiseCancellation) ?
+							<SliderField
+								label="Noise Reduction (default 50%)"
+								value={noiseReductionPercent}
+								resetValue={50}
+								min={0}
+								max={100}
+								step={2}
+								showValue={true}
+								editableValue={true}
+								onChange={(e) => { setNoiseReductionPercent(e); changeNoiseReductionPercent(); }}
+							/> : null
+						}
 						<PanelSectionRow>
 							<Dropdown
 								menuLabel="Select the Microphone Source"
