@@ -87,11 +87,11 @@ class Plugin:
     _micEnabled: bool = False
     _micGain: float = 13.0
     _noiseReductionPercent: int = 50
-    _micSource: float = "NA"
+    _micSource: str = "NA"
     _deckySinkModuleName: str = "Decky-Recording-Sink"
     _echoCancelledAudioName: str = "Echo-Cancelled-Audio"
     _echoCancelledMicName: str = "Echo-Cancelled-Mic"
-    _optional_denoise_binary_path="/home/deck/homebrew/data/decky-recorder/librnnoise_ladspa.so"
+    _optional_denoise_binary_path= decky_plugin.HOME + "/homebrew/data/decky-recorder/librnnoise_ladspa.so"
     _last_clip_time: float = time.time()
     _watchdog_task = None
     _muxer_map = {"mp4": "matroskamux", "mkv": "matroskamux", "mov": "qtmux"}
@@ -151,7 +151,7 @@ class Plugin:
 
             os.environ["XDG_RUNTIME_DIR"] = "/run/user/1000"
             os.environ["XDG_SESSION_TYPE"] = "wayland"
-            os.environ["HOME"] = "/home/deck"
+            os.environ["HOME"] = decky_plugin.DECKY_HOME
 
             # Start command including plugin path and ld_lib path
             start_command = (
@@ -447,7 +447,7 @@ class Plugin:
         self._mode = "localFile"
         self._audioBitrate = 192000
 
-        self._localFilePath = self._settings.getSetting("output_folder", "/home/deck/Videos")
+        self._localFilePath = self._settings.getSetting("output_folder", decky_plugin.DECKY_HOME + "/Videos")
         self._fileformat = self._settings.getSetting("format", "mkv")
         self._rolling = self._settings.getSetting("rolling", False)
         self._micEnabled = self._settings.getSetting("mic_enabled", False)
