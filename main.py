@@ -180,7 +180,7 @@ class Plugin:
                 if not self._rolling:
                     logger.info("Setting local filepath no rolling")
                     self._filepath = f"{self._localFilePath}/{app_name}_{dateTime}.{self._fileformat}"
-                    fileSinkPipeline = f' filesink location="{self._filepath}" '
+                    fileSinkPipeline = f' filesink location="{self._filepath}.temp" '
                 else:
                     logger.info("Setting local filepath")
                     fileSinkPipeline = f" splitmuxsink name=sink muxer={muxer} muxer-pad-map=x-pad-map,audio=vid location={self._filepath} max-size-time=1000000000 max-files=480"
@@ -199,7 +199,7 @@ class Plugin:
 
             cmd = (
                 cmd
-                + f' pulsesrc device="{self._deckySinkModuleName}.monitor" ! audio/x-raw, channels=2 ! audioconvert ! lamemp3enc target=bitrate bitrate={self._audioBitrate} cbr=true ! sink.audio_0'
+                + f' pulsesrc device="{self._deckySinkModuleName}.monitor" ! audio/x-raw, channels=2 ! audioconvert ! avenc_aac bitrate={self._audioBitrate} ! sink.audio_0'
             )
 
             # Starts the capture process
@@ -224,6 +224,12 @@ class Plugin:
         logger.info("Sigin sent. Waiting...")
         try:
             proc.wait(timeout=10)
+            if not self._rolling:
+                # process the gstreamer output with ffmpeg again so that it can be uploaded to Twitter/X
+                logger.info("Process manual recording file with ffmpeg")
+                get_cmd_output(f'ffmpeg -i "{self._filepath}.temp" -c copy "{self._filepath}"')
+                get_cmd_output(f'rm "{self._filepath}.temp"')
+                logger.info("Process manual recording file with ffmpeg finished.")
         except Exception:
             logger.warn("Could not interrupt gstreamer, killing instead")
             await Plugin.clear_rogue_gst_processes(self)
