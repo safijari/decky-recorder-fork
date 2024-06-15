@@ -65,8 +65,10 @@ def in_gamemode():
             pass
     return False
 
-def get_cmd_output(cmd):
-    logger.info(f"Command: {cmd}")
+def get_cmd_output(cmd, log = True):
+    if log:
+        logger.info(f"Command: {cmd}")
+
     return subprocess.getoutput(cmd).strip()
 
 def unload_pa_modules(search_string):
@@ -141,15 +143,20 @@ class Plugin:
                 logger.exception(f"watchdog exception! {Exception.message}")
 
             # Restart recording on sleep wake up to resolve issues
-            wakeup_count = int(get_cmd_output("cat /sys/power/wakeup_count"))
-            prev_wakeup_count = Plugin.get_wakeup_count(self)
-            if wakeup_count > prev_wakeup_count:
+            wakeup_count = int(get_cmd_output("cat /sys/power/wakeup_count", log=False))
+            prev_wakeup_count = await Plugin.get_wakeup_count(self)
+            # The wakeup buffer increments twice before system is fully started
+            # up, so only update the buffer when wakeup count is greater than
+            # old + 1
+            if wakeup_count > prev_wakeup_count + 1:
                     if self._rolling:
+                        # Give it a bit of buffer time to allow system to ready up
+                        await asyncio.sleep(1)
                         logger.warn("Wakeup from sleep detected, restarting capture")
                         await Plugin.stop_capturing(self)
                         await Plugin.start_capturing(self)
+                    await Plugin.set_wakeup_count(self, wakeup_count)
 
-            Plugin.set_wakeup_count(self, wakeup_count)
             await asyncio.sleep(2)
 
     # Starts the capturing process
