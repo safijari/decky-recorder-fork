@@ -95,7 +95,14 @@ class Plugin:
     _last_clip_time: float = time.time()
     _watchdog_task = None
     _muxer_map = {"mp4": "matroskamux", "mkv": "matroskamux", "mov": "qtmux"}
+    _wakeup_count = 1
     _settings = None
+
+    async def get_wakeup_count(self):
+        return self._wakeup_count
+
+    async def set_wakeup_count(self, new_count):
+        self._wakeup_count = new_count
 
     async def clear_rogue_gst_processes(self):
         gst_pids = find_gst_processes()
@@ -108,6 +115,8 @@ class Plugin:
     async def watchdog(self):
         logger.info("Watchdog started")
         while True:
+            # Try to remediate black screen when recording turned on
+            # and attempting to go into desktop mode
             try:
                 in_gm = in_gamemode()
                 is_cap = await Plugin.is_capturing(self, verbose=False)
@@ -130,6 +139,17 @@ class Plugin:
                         await Plugin.start_capturing(self)
             except Exception:
                 logger.exception(f"watchdog exception! {Exception.message}")
+
+            # Restart recording on sleep wake up to resolve issues
+            wakeup_count = int(get_cmd_output("cat /sys/power/wakeup_count"))
+            prev_wakeup_count = Plugin.get_wakeup_count(self)
+            if wakeup_count > prev_wakeup_count:
+                    if self._rolling:
+                        logger.warn("Wakeup from sleep detected, restarting capture")
+                        await Plugin.stop_capturing(self)
+                        await Plugin.start_capturing(self)
+
+            Plugin.set_wakeup_count(self, wakeup_count)
             await asyncio.sleep(2)
 
     # Starts the capturing process
