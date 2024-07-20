@@ -25,6 +25,7 @@ class DeckyRecorderLogic
 	{
 	serverAPI: ServerAPI;
 	pressedAt: number = Date.now();
+  lastDuration: number = 30;
 
 	constructor(serverAPI: ServerAPI) {
 		this.serverAPI = serverAPI;
@@ -42,7 +43,11 @@ class DeckyRecorderLogic
 		});
 	}
 
-	saveRollingRecording = async  (duration: number) => {
+	saveRollingRecording = async  (d?: number) => {
+    let duration: number = d ?? this.lastDuration;
+    if (d) {
+      this.lastDuration = duration;
+    }
 		const res = await this.serverAPI.callPluginMethod('save_rolling_recording', { clip_duration: duration, app_name: Router.MainRunningApp?.display_name});
 		let r = (res.result as number)
 		if (r > 0) {
@@ -50,7 +55,7 @@ class DeckyRecorderLogic
 		} else if (r == 0) {
 			await this.notify("Too early to record another clip");
 		} else if (r == -1) {
-			await this.notify("Enabling replay mode", 1500, "Steam + Start to save last 30 seconds");
+			await this.notify("Enabling replay mode", 1500, `Steam + Start to save last ${this.lastDuration} seconds`);
 		} else {
 			await this.notify("ERROR: Could not save clip");
 		}
@@ -116,9 +121,9 @@ class DeckyRecorderLogic
 				}, 1000)
 				const isRolling = await this.serverAPI.callPluginMethod("is_rolling", {});
 				if (isRolling.result as boolean) {
-					await this.saveRollingRecording(30);
+					await this.saveRollingRecording();
 				} else {
-					await this.notify("Enabling replay mode", 1500, "Steam + Start to save last 30 seconds");
+					await this.notify("Enabling replay mode", 1500, `Steam + Start to save last ${this.lastDuration} seconds`);
 					this.toggleRolling(false);
 				}
 			}
@@ -325,7 +330,7 @@ const DeckyRecorder: VFC<{ serverAPI: ServerAPI, logic: DeckyRecorderLogic }> = 
 					checked={isRolling}
 					onChange={(e) => { setRolling(e); rollingToggled(); }}
 				/>
-				<div>Steam + Start saves a 30 second clip in replay mode. If replay mode is off, this shortcut will enable it.</div>
+				<div>Steam + Start saves a short clip in replay mode. If replay mode is off, this shortcut will enable it.</div>
 				<ToggleField
 					label="Enable Microphone Recording"
 					checked={microphoneEnabled}
