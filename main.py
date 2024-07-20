@@ -65,8 +65,10 @@ def in_gamemode():
             pass
     return False
 
-def get_cmd_output(cmd):
-    logger.info(f"Command: {cmd}")
+def get_cmd_output(cmd, log = True):
+    if log:
+        logger.info(f"Command: {cmd}")
+
     return subprocess.getoutput(cmd).strip()
 
 def unload_pa_modules(search_string):
@@ -95,7 +97,14 @@ class Plugin:
     _last_clip_time: float = time.time()
     _watchdog_task = None
     _muxer_map = {"mp4": "matroskamux", "mkv": "matroskamux", "mov": "qtmux"}
+    _wakeup_count = 1
     _settings = None
+
+    async def get_wakeup_count(self):
+        return self._wakeup_count
+
+    async def set_wakeup_count(self, new_count):
+        self._wakeup_count = new_count
 
     async def clear_rogue_gst_processes(self):
         gst_pids = find_gst_processes()
@@ -108,6 +117,8 @@ class Plugin:
     async def watchdog(self):
         logger.info("Watchdog started")
         while True:
+            # Try to remediate black screen when recording turned on
+            # and attempting to go into desktop mode
             try:
                 in_gm = in_gamemode()
                 is_cap = await Plugin.is_capturing(self, verbose=False)
@@ -130,6 +141,22 @@ class Plugin:
                         await Plugin.start_capturing(self)
             except Exception:
                 logger.exception(f"watchdog exception! {Exception.message}")
+
+            # Restart recording on sleep wake up to resolve issues
+            wakeup_count = int(get_cmd_output("cat /sys/power/wakeup_count", log=False))
+            prev_wakeup_count = await Plugin.get_wakeup_count(self)
+            # The wakeup buffer increments twice before system is fully started
+            # up, so only update the buffer when wakeup count is greater than
+            # old + 1
+            if wakeup_count > prev_wakeup_count + 1:
+                    if self._rolling:
+                        # Give it a bit of buffer time to allow system to ready up
+                        await asyncio.sleep(1)
+                        logger.warn("Wakeup from sleep detected, restarting capture")
+                        await Plugin.stop_capturing(self)
+                        await Plugin.start_capturing(self)
+                    await Plugin.set_wakeup_count(self, wakeup_count)
+
             await asyncio.sleep(2)
 
     # Starts the capturing process
@@ -320,7 +347,9 @@ class Plugin:
 
             get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName}.monitor sink={self._deckySinkModuleName}")
         else:
-            get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master={self._micSource} sink_master=@DEFAULT_SINK@ source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_gain_control=0 digital_gain_control=1'")
+            audio_device_output = get_cmd_output("pactl get-default-sink")
+
+            get_cmd_output(f"pactl load-module module-echo-cancel use_master_format=1 source_master={self._micSource} sink_master={audio_device_output} source_name={self._echoCancelledMicName} sink_name={self._echoCancelledAudioName} aec_method='webrtc' aec_args='analog_gain_control=0 digital_gain_control=1'")
             get_cmd_output(f"pactl set-source-volume Echo-Cancelled-Mic {self._micGain}db")
             get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledMicName} sink={self._deckySinkModuleName}")
             get_cmd_output(f"pactl load-module module-loopback source={self._echoCancelledAudioName}.monitor sink={self._deckySinkModuleName}")
